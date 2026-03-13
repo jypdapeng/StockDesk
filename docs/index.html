@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>股票盯盘 - 轻量级 Windows A 股盯盘工具</title>
+    <meta
+      name="description"
+      content="股票盯盘是一款轻量级 Windows 桌面盯盘工具，支持右侧悬浮小窗、到价提醒、多股票管理、成本价与持仓手数跟踪、实时盈亏展示。"
+    />
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --panel: rgba(255, 255, 255, 0.78);
+        --panel-strong: #ffffff;
+        --text: #162031;
+        --muted: #5a667d;
+        --line: rgba(22, 32, 49, 0.08);
+        --brand: #0f7a52;
+        --brand-dark: #0a5e3e;
+        --accent: #0b67d1;
+        --danger: #d1495b;
+        --shadow: 0 24px 60px rgba(22, 32, 49, 0.12);
+        --radius: 28px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(11, 103, 209, 0.14), transparent 28%),
+          radial-gradient(circle at top right, rgba(15, 122, 82, 0.14), transparent 26%),
+          linear-gradient(180deg, #fbfcff 0%, #eef2f9 100%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1160px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .hero {
+        padding: 28px 0 72px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 18px;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0b67d1 0%, #0f7a52 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        position: relative;
+      }
+
+      .brand-mark::before,
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.94);
+      }
+
+      .brand-mark::before {
+        top: 12px;
+        height: 5px;
+      }
+
+      .brand-mark::after {
+        top: 22px;
+        height: 5px;
+        right: 6px;
+      }
+
+      .top-links {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .link-chip {
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .hero-copy {
+        padding: 14px 0;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(11, 103, 209, 0.09);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      h1 {
+        font-size: clamp(34px, 6vw, 64px);
+        line-height: 1.04;
+        margin: 18px 0 18px;
+      }
+
+      .lead {
+        max-width: 720px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.8;
+        margin-bottom: 28px;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px 20px;
+        border-radius: 18px;
+        font-size: 15px;
+        font-weight: 700;
+        box-shadow: var(--shadow);
+      }
+
+      .button-primary {
+        background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+        color: #fff;
+      }
+
+      .button-secondary {
+        background: #fff;
+        border: 1px solid var(--line);
+      }
+
+      .meta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .meta span {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .mock {
+        position: relative;
+        min-height: 560px;
+      }
+
+      .glow {
+        position: absolute;
+        inset: 24px 24px 48px 24px;
+        background: linear-gradient(180deg, rgba(11, 103, 209, 0.18), rgba(15, 122, 82, 0.1));
+        filter: blur(42px);
+      }
+
+      .widget {
+        position: relative;
+        margin-left: auto;
+        width: min(100%, 420px);
+        border-radius: 32px;
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(17, 24, 39, 0.92));
+        color: #f8fbff;
+        padding: 18px;
+        box-shadow: 0 30px 80px rgba(8, 18, 35, 0.3);
+      }
+
+      .widget-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .widget-title {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .widget-time {
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 13px;
+      }
+
+      .stock-card {
+        border-radius: 22px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 12px;
+      }
+
+      .stock-card.featured {
+        background: linear-gradient(180deg, rgba(15, 122, 82, 0.18), rgba(11, 103, 209, 0.12));
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+
+      .stock-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+
+      .stock-name {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .stock-code {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.62);
+      }
+
+      .stock-price {
+        font-family: Consolas, monospace;
+        font-size: 30px;
+        font-weight: 700;
+      }
+
+      .rise {
+        color: #ff7a7a;
+      }
+
+      .fall {
+        color: #43d98e;
+      }
+
+      .stock-meta {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        color: rgba(255, 255, 255, 0.74);
+        font-size: 13px;
+      }
+
+      .stock-meta span {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .section {
+        padding: 0 0 72px;
+      }
+
+      .section-title {
+        font-size: 28px;
+        margin: 0 0 10px;
+      }
+
+      .section-desc {
+        color: var(--muted);
+        line-height: 1.8;
+        margin: 0 0 24px;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        border-radius: var(--radius);
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--line);
+        padding: 22px;
+        box-shadow: var(--shadow);
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 19px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .keywords {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .keyword {
+        padding: 10px 14px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      .cta-panel {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+        align-items: center;
+      }
+
+      .qr-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .qr {
+        border-radius: 24px;
+        background: #fff;
+        padding: 14px;
+        border: 1px solid var(--line);
+      }
+
+      .qr img {
+        display: block;
+        width: 100%;
+        border-radius: 18px;
+      }
+
+      .qr strong {
+        display: block;
+        margin-top: 10px;
+      }
+
+      footer {
+        padding: 0 0 40px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .cta-panel,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+
+        .mock {
+          min-height: auto;
+        }
+
+        .widget {
+          margin: 0 auto;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          width: min(100% - 24px, 100%);
+        }
+
+        .qr-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="hero">
+      <div class="shell">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <span>股票盯盘</span>
+          </div>
+          <div class="top-links">
+            <a class="link-chip" href="https://github.com/jypdapeng/StockDesk" target="_blank" rel="noreferrer">GitHub 仓库</a>
+            <a class="link-chip" href="https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe">Windows 安装包</a>
+          </div>
+        </div>
+
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">适合百度搜索推广与软件下载投放</div>
+            <h1>轻量、直接、好用的<br />Windows 股票盯盘工具</h1>
+            <p class="lead">
+              股票盯盘专注解决一个问题：让你在 Windows 桌面右下角，实时看到关心的股票价格、成本、持仓和盈亏变化。
+              不需要打开复杂软件，不需要盯着大盘页面，也能及时收到到价提醒。
+            </p>
+            <div class="cta-row">
+              <a class="button button-primary" href="https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe">立即下载 Windows 安装包</a>
+              <a class="button button-secondary" href="https://github.com/jypdapeng/StockDesk" target="_blank" rel="noreferrer">查看 GitHub 开源仓库</a>
+            </div>
+            <div class="meta">
+              <span>右侧悬浮小窗</span>
+              <span>多股票管理</span>
+              <span>到价 Windows 通知</span>
+              <span>成本价 / 持仓 / 盈亏</span>
+            </div>
+          </div>
+
+          <div class="mock">
+            <div class="glow" aria-hidden="true"></div>
+            <div class="widget">
+              <div class="widget-head">
+                <div class="widget-title">股票盯盘</div>
+                <div class="widget-time">14:30:18</div>
+              </div>
+
+              <div class="stock-card featured">
+                <div class="stock-top">
+                  <div>
+                    <div class="stock-name">贵州茅台</div>
+                    <div class="stock-code">600519.SH</div>
+                  </div>
+                  <div class="stock-price rise">1588.66</div>
+                </div>
+                <div class="stock-meta">
+                  <span>涨跌 +12.32 / +0.78%</span>
+                  <span>成本 1542.00</span>
+                  <span>持仓 3 手</span>
+                  <span>盈亏 +13998.00</span>
+                </div>
+              </div>
+
+              <div class="stock-card">
+                <div class="stock-top">
+                  <div>
+                    <div class="stock-name">中际旭创</div>
+                    <div class="stock-code">300308.SZ</div>
+                  </div>
+                  <div class="stock-price fall">167.42</div>
+                </div>
+                <div class="stock-meta">
+                  <span>涨跌 -2.16 / -1.27%</span>
+                  <span>提醒位 170 / 160</span>
+                  <span>支持浏览器一键打开</span>
+                </div>
+              </div>
+
+              <div class="stock-card">
+                <div class="stock-top">
+                  <div>
+                    <div class="stock-name">到价提醒</div>
+                    <div class="stock-code">Windows 通知</div>
+                  </div>
+                  <div class="stock-price">实时</div>
+                </div>
+                <div class="stock-meta">
+                  <span>价格穿越阈值自动提醒</span>
+                  <span>编辑后自动生效</span>
+                  <span>支持赞赏二维码弹窗</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <section class="section">
+      <div class="shell">
+        <h2 class="section-title">为什么这个工具更适合个人盯盘</h2>
+        <p class="section-desc">
+          它不是一套复杂的行情系统，而是一个更贴近日常桌面使用习惯的小工具。
+          你可以把它理解成“盯盘专用桌面边栏”，把最常看的几只股票和最关心的价格位固定在眼前。
+        </p>
+        <div class="grid-3">
+          <div class="card">
+            <h3>桌面右侧悬浮</h3>
+            <p>默认吸附右侧边缘，鼠标移入展开，离开自动隐藏，不会一直占满屏幕，也不会影响日常办公。</p>
+          </div>
+          <div class="card">
+            <h3>看得到真实持仓压力</h3>
+            <p>支持成本价、持仓手数、实时盈亏展示，不只是看行情涨跌，而是直接看到和自己仓位相关的数字。</p>
+          </div>
+          <div class="card">
+            <h3>提醒更直接</h3>
+            <p>设置关键价位后，价格穿越阈值会直接触发 Windows 通知，不需要盯着网页刷新，也不用一直切窗口。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="shell">
+        <h2 class="section-title">适合投放的关键词方向</h2>
+        <p class="section-desc">
+          如果你准备做百度推广或其他搜索广告，下面这些词更容易匹配到“明确想找工具”的用户。
+        </p>
+        <div class="keywords">
+          <div class="keyword">股票盯盘软件</div>
+          <div class="keyword">A股到价提醒</div>
+          <div class="keyword">Windows 股票悬浮窗</div>
+          <div class="keyword">股票桌面小工具</div>
+          <div class="keyword">A股桌面提醒软件</div>
+          <div class="keyword">股票盈亏提醒工具</div>
+          <div class="keyword">多股票监控软件</div>
+          <div class="keyword">股票价格提醒</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="shell">
+        <div class="card cta-panel">
+          <div>
+            <h2 class="section-title">现在就下载试用</h2>
+            <p class="section-desc">
+              支持 Windows 安装包直接安装。适合个人桌面盯盘使用，开箱即用，开源可见。
+            </p>
+            <div class="cta-row">
+              <a class="button button-primary" href="https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe">下载最新安装包</a>
+              <a class="button button-secondary" href="https://github.com/jypdapeng/StockDesk/releases">查看所有版本</a>
+            </div>
+          </div>
+          <div class="qr-grid">
+            <div class="qr">
+              <img src="assets/donate_alipay.jpg" alt="支付宝收款码" />
+              <strong>支付宝赞赏</strong>
+            </div>
+            <div class="qr">
+              <img src="assets/donate_wechat.jpg" alt="微信支付收款码" />
+              <strong>微信赞赏</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="shell">
+        股票盯盘仅用于个人盯盘与便捷查看，不构成投资建议。
+      </div>
+    </footer>
+  </body>
+</html>
