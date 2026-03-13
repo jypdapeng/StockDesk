@@ -13,6 +13,10 @@ It includes:
 - One-click jump to the stock quote page
 - Packaged Windows app and installer build scripts
 
+## Download
+
+- Installer: [StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
+
 ## Features
 
 - Right-edge auto-hide widget

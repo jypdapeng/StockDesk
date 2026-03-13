@@ -43,6 +43,7 @@ $notify.Dispose()
         text=True,
         timeout=15,
         check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     error_text = (result.stderr or result.stdout or "").strip()
     return result.returncode == 0, error_text
@@ -71,6 +72,46 @@ def side_of(price: float, level: float) -> str:
     if price < level:
         return "below"
     return "equal"
+
+
+def sync_state(state: dict, config: dict) -> dict:
+    next_state: dict[str, dict] = {}
+    for item in config["stocks"]:
+        symbol = item["symbol"]
+        existing = state.get(symbol, {})
+        old_sides = existing.get("sides", {})
+        next_state[symbol] = {
+            "levels": item["levels"],
+            "sides": {level: old_sides.get(level) for level in item["levels"]},
+            "market": item["market"],
+        }
+    return next_state
+
+
+def maybe_reload_config(
+    config_path: pathlib.Path,
+    last_mtime: float | None,
+    state: dict,
+    log_file: pathlib.Path | None,
+) -> tuple[dict, float | None, dict, pathlib.Path | None]:
+    try:
+        mtime = config_path.stat().st_mtime
+    except FileNotFoundError:
+        return load_config(config_path), last_mtime, state, log_file
+
+    if last_mtime is not None and mtime == last_mtime:
+        config = load_config(config_path)
+        return config, last_mtime, state, pathlib.Path(config["log_file"]) if config.get("log_file") else None
+
+    config = load_config(config_path)
+    next_log_file = pathlib.Path(config["log_file"]) if config.get("log_file") else None
+    next_state = sync_state(state, config)
+    if last_mtime is not None:
+        log(
+            f"config reloaded: symbols={', '.join(item['symbol'] for item in config['stocks'])}",
+            next_log_file or log_file,
+        )
+    return config, mtime, next_state, next_log_file
 
 
 def check_crossings(state: dict, quote: dict, log_file: pathlib.Path | None) -> None:
@@ -112,12 +153,11 @@ def run_monitor(config_path: pathlib.Path, interval_override: int | None = None,
         print(f"failed to load config: {exc}", file=sys.stderr)
         return 1
 
+    config_path = pathlib.Path(config_path)
+    last_mtime = config_path.stat().st_mtime if config_path.exists() else None
     interval = interval_override or config["interval"]
     log_file = pathlib.Path(config["log_file"]) if config.get("log_file") else None
-    state = {
-        item["symbol"]: {"levels": item["levels"], "sides": {}, "market": item["market"]}
-        for item in config["stocks"]
-    }
+    state = sync_state({}, config)
 
     log(
         f"stock monitor started, interval={interval}s, symbols={', '.join(item['symbol'] for item in config['stocks'])}",
@@ -125,6 +165,10 @@ def run_monitor(config_path: pathlib.Path, interval_override: int | None = None,
     )
 
     while True:
+        if interval_override is None:
+            config, last_mtime, state, log_file = maybe_reload_config(config_path, last_mtime, state, log_file)
+            interval = config["interval"]
+
         for item in config["stocks"]:
             try:
                 quote = fetch_quote(item["symbol"], item["market"])

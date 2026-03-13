@@ -10,3 +10,4 @@ StockDesk.spec
 
 .venv/
 venv/
+tmp-skill-check.mjs
