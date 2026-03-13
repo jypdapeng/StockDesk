@@ -14,7 +14,7 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from stock_common import BASE_DIR, DEFAULT_CONFIG, fetch_quote, infer_market, load_config, save_config
+from stock_common import DEFAULT_CONFIG, RESOURCE_DIR, fetch_quote, infer_market, load_config, save_config
 
 
 BG = "#111827"
@@ -27,8 +27,8 @@ FLAT = "#f59e0b"
 SELECTED = "#0f172a"
 ACCENT = "#22c55e"
 BORDER = "#374151"
-DONATE_ALIPAY = BASE_DIR / "assets" / "donate_alipay.jpg"
-DONATE_WECHAT = BASE_DIR / "assets" / "donate_wechat.jpg"
+DONATE_ALIPAY = RESOURCE_DIR / "assets" / "donate_alipay.jpg"
+DONATE_WECHAT = RESOURCE_DIR / "assets" / "donate_wechat.jpg"
 
 
 def color_for_change(change: float) -> str:

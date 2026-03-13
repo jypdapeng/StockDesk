@@ -4,15 +4,22 @@ import sys
 import urllib.request
 
 
-BASE_DIR = pathlib.Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else pathlib.Path(__file__).resolve().parent
-DEFAULT_CONFIG = BASE_DIR / "stocks.json"
+if getattr(sys, "frozen", False):
+    APP_DIR = pathlib.Path(sys.executable).resolve().parent
+    RESOURCE_DIR = APP_DIR / "_internal"
+else:
+    APP_DIR = pathlib.Path(__file__).resolve().parent
+    RESOURCE_DIR = APP_DIR
+
+BASE_DIR = APP_DIR
+DEFAULT_CONFIG = APP_DIR / "stocks.json"
 QQ_QUOTE_URL = "https://qt.gtimg.cn/q={market}{symbol}"
 
 
 def default_config_payload() -> dict:
     return {
         "interval": 1,
-        "log_file": str(BASE_DIR / "stock_monitor.log"),
+        "log_file": str(APP_DIR / "stock_monitor.log"),
         "stocks": [],
     }
 
