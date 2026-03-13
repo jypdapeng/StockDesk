@@ -1,5 +1,7 @@
 # StockDesk
 
+[中文说明](README.zh-CN.md)
+
 StockDesk is a lightweight Windows desktop stock monitor for A-share users.
 
 It includes:
@@ -21,13 +23,13 @@ It includes:
 
 If StockDesk helps you, you can support the project here.
 
-支付宝
+Alipay
 
-![支付宝收款码](assets/donate_alipay.jpg)
+![Alipay QR Code](assets/donate_alipay.jpg)
 
-微信支付
+WeChat Pay
 
-![微信收款码](assets/donate_wechat.jpg)
+![WeChat Pay QR Code](assets/donate_wechat.jpg)
 
 ## Features
 
