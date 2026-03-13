@@ -1,0 +1,25 @@
+$ErrorActionPreference = "Stop"
+
+$python = "C:\Users\11317\AppData\Local\Programs\Python\Python310\python.exe"
+$root = "C:\Users\11317\Documents\Playground"
+$icon = Join-Path $root "assets\stock_app.ico"
+$dist = Join-Path $root "dist"
+$build = Join-Path $root "build"
+$spec = Join-Path $root "StockDesk.spec"
+
+Set-Location $root
+
+if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+if (Test-Path $build) { Remove-Item $build -Recurse -Force }
+if (Test-Path $spec) { Remove-Item $spec -Force }
+
+& $python -m PyInstaller `
+  --noconfirm `
+  --clean `
+  --windowed `
+  --name StockDesk `
+  --icon $icon `
+  --add-data "stocks.json;." `
+  stock_suite.py
+
+Write-Host "Build complete: $root\dist\StockDesk\StockDesk.exe"

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+build/
+dist/
+installer/
+StockDesk.spec
+
+.venv/
+venv/

@@ -1,0 +1,23 @@
+{
+  "interval": 1,
+  "log_file": "C:/Users/11317/Documents/Playground/stock_monitor.log",
+  "stocks": [
+    {
+      "symbol": "600759",
+      "cost_price": 7.545,
+      "levels": [
+        7.6,
+        7.1
+      ],
+      "lots": 19,
+      "market": "sh"
+    },
+    {
+      "symbol": "000815",
+      "levels": [
+        16.96
+      ],
+      "market": "sz"
+    }
+  ]
+}
