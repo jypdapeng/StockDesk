@@ -18,6 +18,7 @@ It includes:
 ## Download
 
 - Installer: [StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
+- Website / Demo: [GitHub Pages](https://jypdapeng.github.io/StockDesk/)
 
 ## Donate
 

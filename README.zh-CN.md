@@ -18,6 +18,7 @@ StockDesk 是一个面向 A 股用户的轻量级 Windows 桌面盯盘工具。
 ## 下载
 
 - 安装包：[StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
+- 官网 / 演示页：[GitHub Pages](https://jypdapeng.github.io/StockDesk/)
 
 ## 赞赏
 
