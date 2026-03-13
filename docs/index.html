@@ -296,6 +296,243 @@
         padding: 0 0 72px;
       }
 
+      .demo-wrap {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 22px;
+        align-items: center;
+      }
+
+      .demo-stage {
+        position: relative;
+        overflow: hidden;
+        border-radius: 30px;
+        background:
+          linear-gradient(180deg, rgba(7, 13, 24, 0.96), rgba(17, 24, 39, 0.96)),
+          #0f172a;
+        min-height: 480px;
+        box-shadow: 0 30px 80px rgba(8, 18, 35, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .demo-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 22px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .demo-dot-group {
+        display: flex;
+        gap: 8px;
+      }
+
+      .demo-dot-group span {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .demo-dot-group span:nth-child(1) {
+        background: #ff6d6d;
+      }
+
+      .demo-dot-group span:nth-child(2) {
+        background: #ffb84d;
+      }
+
+      .demo-dot-group span:nth-child(3) {
+        background: #2ed47a;
+      }
+
+      .demo-title {
+        font-size: 14px;
+        letter-spacing: 0.03em;
+      }
+
+      .demo-body {
+        position: relative;
+        padding: 22px;
+        min-height: 408px;
+      }
+
+      .demo-screen {
+        position: absolute;
+        inset: 22px;
+        padding: 18px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        opacity: 0;
+        transform: translateY(16px) scale(0.985);
+        animation: demo-cycle 18s infinite;
+      }
+
+      .demo-screen:nth-child(2) {
+        animation-delay: 6s;
+      }
+
+      .demo-screen:nth-child(3) {
+        animation-delay: 12s;
+      }
+
+      .demo-screen h3 {
+        margin: 0 0 8px;
+        color: #fff;
+        font-size: 22px;
+      }
+
+      .demo-screen p {
+        margin: 0 0 16px;
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.8;
+      }
+
+      .mini-widget {
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 16px;
+        width: min(100%, 300px);
+        margin-left: auto;
+      }
+
+      .mini-item {
+        border-radius: 16px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        margin-bottom: 10px;
+      }
+
+      .mini-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .mini-item strong {
+        display: block;
+        color: #fff;
+        margin-bottom: 6px;
+      }
+
+      .mini-item span {
+        display: block;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 13px;
+      }
+
+      .cursor {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.12);
+        animation: cursor-move 6s infinite;
+      }
+
+      .toast {
+        position: absolute;
+        right: 14px;
+        bottom: 18px;
+        width: 270px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(31, 41, 55, 0.98));
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+        animation: toast-pop 6s infinite;
+      }
+
+      .toast small {
+        display: block;
+        color: rgba(255, 255, 255, 0.62);
+        margin-bottom: 6px;
+      }
+
+      .steps {
+        display: grid;
+        gap: 14px;
+      }
+
+      .step {
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+
+      .step strong {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        margin-right: 10px;
+        border-radius: 999px;
+        background: rgba(11, 103, 209, 0.1);
+        color: var(--accent);
+      }
+
+      .step p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      @keyframes demo-cycle {
+        0% {
+          opacity: 0;
+          transform: translateY(16px) scale(0.985);
+        }
+        7%,
+        28% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+        33%,
+        100% {
+          opacity: 0;
+          transform: translateY(-10px) scale(1.01);
+        }
+      }
+
+      @keyframes cursor-move {
+        0%,
+        12% {
+          transform: translate(20px, 28px);
+        }
+        30%,
+        44% {
+          transform: translate(210px, 112px);
+        }
+        62%,
+        78% {
+          transform: translate(120px, 230px);
+        }
+        100% {
+          transform: translate(20px, 28px);
+        }
+      }
+
+      @keyframes toast-pop {
+        0%,
+        42%,
+        100% {
+          opacity: 0;
+          transform: translateY(22px);
+        }
+        50%,
+        84% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
       .section-title {
         font-size: 28px;
         margin: 0 0 10px;
@@ -388,7 +625,8 @@
       @media (max-width: 980px) {
         .hero-grid,
         .cta-panel,
-        .grid-3 {
+        .grid-3,
+        .demo-wrap {
           grid-template-columns: 1fr;
         }
 
@@ -504,6 +742,85 @@
         </div>
       </div>
     </main>
+
+    <section class="section">
+      <div class="shell">
+        <h2 class="section-title">使用演示</h2>
+        <p class="section-desc">
+          下面这段动态演示展示的是典型使用流程：添加股票、设置提醒位、实时看到盈亏变化，并在到价时收到 Windows 通知。
+        </p>
+        <div class="demo-wrap">
+          <div class="demo-stage">
+            <div class="demo-topbar">
+              <div class="demo-dot-group" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="demo-title">股票盯盘 · 使用演示</div>
+            </div>
+            <div class="demo-body">
+              <div class="demo-screen">
+                <h3>1. 添加想盯的股票</h3>
+                <p>输入股票代码、提醒位、成本价和持仓手数后，信息会立刻显示到右侧悬浮小窗。</p>
+                <div class="mini-widget">
+                  <div class="mini-item">
+                    <strong>贵州茅台</strong>
+                    <span>代码：600519</span>
+                    <span>提醒位：1600 / 1550</span>
+                    <span>成本：1542.00 持仓：3手</span>
+                  </div>
+                </div>
+                <div class="cursor"></div>
+              </div>
+
+              <div class="demo-screen">
+                <h3>2. 桌面右侧实时盯盘</h3>
+                <p>小窗默认吸附在屏幕右边，鼠标移入展开，离开自动隐藏，不会影响你日常办公或看盘。</p>
+                <div class="mini-widget">
+                  <div class="mini-item">
+                    <strong>贵州茅台</strong>
+                    <span>现价：1588.66</span>
+                    <span>涨跌：+12.32 / +0.78%</span>
+                    <span>盈亏：+13998.00</span>
+                  </div>
+                  <div class="mini-item">
+                    <strong>中际旭创</strong>
+                    <span>现价：167.42</span>
+                    <span>提醒位：170 / 160</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="demo-screen">
+                <h3>3. 到价后直接提醒</h3>
+                <p>价格穿越设定阈值时，会弹出 Windows 通知。你可以继续工作，不需要一直开着行情软件。</p>
+                <div class="toast">
+                  <small>Windows 通知</small>
+                  <div><strong>股票盯盘提醒</strong></div>
+                  <div>中际旭创 300308 到达提醒位 170.00，当前价格 170.18</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="steps">
+            <div class="step">
+              <div><strong>1</strong> 添加股票</div>
+              <p>在小窗里直接新增股票代码、提醒位、成本价和持仓手数，不需要单独打开复杂的设置页面。</p>
+            </div>
+            <div class="step">
+              <div><strong>2</strong> 盯盘更轻</div>
+              <p>平时自动缩在右侧边缘，鼠标经过时展开，适合边办公边看自己最关心的几只股票。</p>
+            </div>
+            <div class="step">
+              <div><strong>3</strong> 收到提醒</div>
+              <p>一旦价格穿越你设定的关键位，就直接通过 Windows 通知提醒，帮你减少错过卖点或买点的情况。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section class="section">
       <div class="shell">
