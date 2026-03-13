@@ -8,7 +8,13 @@ from tkinter import messagebox
 import urllib.error
 import webbrowser
 
-from stock_common import DEFAULT_CONFIG, fetch_quote, infer_market, load_config, save_config
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
+from stock_common import BASE_DIR, DEFAULT_CONFIG, fetch_quote, infer_market, load_config, save_config
 
 
 BG = "#111827"
@@ -21,6 +27,8 @@ FLAT = "#f59e0b"
 SELECTED = "#0f172a"
 ACCENT = "#22c55e"
 BORDER = "#374151"
+DONATE_ALIPAY = BASE_DIR / "assets" / "donate_alipay.jpg"
+DONATE_WECHAT = BASE_DIR / "assets" / "donate_wechat.jpg"
 
 
 def color_for_change(change: float) -> str:
@@ -74,6 +82,7 @@ class StockWidget:
             ("新增", self.open_add_dialog, "#2563eb"),
             ("编辑", self.open_edit_dialog, "#374151"),
             ("打开", self.open_selected_site, "#065f46"),
+            ("赞赏", self.open_donate_dialog, "#7c3aed"),
             ("删除", self.delete_selected, "#7f1d1d"),
             ("关闭", self.root.destroy, PANEL),
         ):
@@ -94,7 +103,7 @@ class StockWidget:
 
         tk.Label(
             frame,
-            text="点击一行后可编辑、打开或删除",
+            text="点击一行后可编辑、打开、赞赏或删除",
             fg=MUTED,
             bg=PANEL,
             font=("Microsoft YaHei UI", 8),
@@ -286,6 +295,61 @@ class StockWidget:
             return
         market = current.get("market") or infer_market(self.selected_symbol)
         webbrowser.open(f"https://gu.qq.com/{market}{self.selected_symbol}", new=2)
+
+    def open_donate_dialog(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("赞赏作者")
+        dialog.configure(bg=PANEL)
+        dialog.attributes("-topmost", True)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(dialog, text="如果这个软件对你有帮助，欢迎打赏支持。", fg=TEXT, bg=PANEL, font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w", padx=16, pady=(16, 8))
+        tk.Label(dialog, text="感谢你的支持。", fg=MUTED, bg=PANEL, font=("Microsoft YaHei UI", 8)).pack(anchor="w", padx=16, pady=(0, 12))
+
+        content = tk.Frame(dialog, bg=PANEL)
+        content.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+        self.render_donate_card(content, "支付宝", DONATE_ALIPAY)
+        self.render_donate_card(content, "微信支付", DONATE_WECHAT)
+
+        footer = tk.Frame(dialog, bg=PANEL)
+        footer.pack(fill="x", padx=16, pady=(0, 16))
+        tk.Button(footer, text="关闭", command=dialog.destroy).pack(side="right")
+
+        dialog.update_idletasks()
+        root_x = self.root.winfo_x()
+        root_y = self.root.winfo_y()
+        root_w = self.root.winfo_width()
+        root_h = self.root.winfo_height()
+        dialog_w = dialog.winfo_reqwidth()
+        dialog_h = dialog.winfo_reqheight()
+        x = root_x + max(0, (root_w - dialog_w) // 2)
+        y = root_y + max(0, (root_h - dialog_h) // 2)
+        dialog.geometry(f"+{x}+{y}")
+        dialog.bind("<Enter>", self.on_mouse_enter, add="+")
+
+    def render_donate_card(self, parent: tk.Widget, title: str, image_path: pathlib.Path) -> None:
+        card = tk.Frame(parent, bg=BG, padx=12, pady=12, highlightthickness=1, highlightbackground=BORDER)
+        card.pack(side="left", padx=(0, 12), fill="both", expand=True)
+        tk.Label(card, text=title, fg=TEXT, bg=BG, font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w", pady=(0, 8))
+
+        if image_path.exists() and Image and ImageTk:
+            image = Image.open(image_path)
+            image.thumbnail((220, 320))
+            photo = ImageTk.PhotoImage(image)
+            label = tk.Label(card, image=photo, bg=BG)
+            label.image = photo
+            label.pack(anchor="center")
+        else:
+            tk.Label(
+                card,
+                text=f"缺少图片：{image_path.name}\n请把对应收款码放到 assets 目录。",
+                fg=MUTED,
+                bg=BG,
+                justify="left",
+                font=("Microsoft YaHei UI", 8),
+            ).pack(anchor="w")
 
     def open_edit_dialog(self) -> None:
         if not self.selected_symbol:

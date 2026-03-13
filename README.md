@@ -17,6 +17,18 @@ It includes:
 
 - Installer: [StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
 
+## Donate
+
+If StockDesk helps you, you can support the project here.
+
+支付宝
+
+![支付宝收款码](assets/donate_alipay.jpg)
+
+微信支付
+
+![微信收款码](assets/donate_wechat.jpg)
+
 ## Features
 
 - Right-edge auto-hide widget

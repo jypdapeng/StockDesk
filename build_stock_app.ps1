@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $python = "C:\Users\11317\AppData\Local\Programs\Python\Python310\python.exe"
 $root = "C:\Users\11317\Documents\Playground"
 $icon = Join-Path $root "assets\stock_app.ico"
+$assets = Join-Path $root "assets"
 $dist = Join-Path $root "dist"
 $build = Join-Path $root "build"
 $spec = Join-Path $root "StockDesk.spec"
@@ -27,6 +28,7 @@ try {
     --name StockDesk `
     --icon $icon `
     --add-data "stocks.json;." `
+    --add-data "assets;assets" `
     stock_suite.py
 }
 finally {
