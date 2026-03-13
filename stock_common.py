@@ -13,15 +13,7 @@ def default_config_payload() -> dict:
     return {
         "interval": 1,
         "log_file": str(BASE_DIR / "stock_monitor.log"),
-        "stocks": [
-            {
-                "symbol": "600759",
-                "market": "sh",
-                "levels": [7.6, 7.1],
-                "cost_price": 7.545,
-                "lots": 19,
-            }
-        ],
+        "stocks": [],
     }
 
 
@@ -84,8 +76,8 @@ def load_config(path: pathlib.Path | None = None) -> dict:
     with pathlib.Path(path).open("r", encoding="utf-8") as fh:
         data = json.load(fh)
 
-    if "stocks" not in data or not isinstance(data["stocks"], list) or not data["stocks"]:
-        raise ValueError("config must contain a non-empty 'stocks' list")
+    if "stocks" not in data or not isinstance(data["stocks"], list):
+        raise ValueError("config must contain a 'stocks' list")
 
     interval = int(data.get("interval", 30))
     stocks = []

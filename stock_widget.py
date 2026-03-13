@@ -19,6 +19,8 @@ UP = "#ef4444"
 DOWN = "#22c55e"
 FLAT = "#f59e0b"
 SELECTED = "#0f172a"
+ACCENT = "#22c55e"
+BORDER = "#374151"
 
 
 def color_for_change(change: float) -> str:
@@ -35,11 +37,11 @@ class StockWidget:
         self.config = load_config(config_path)
         self.interval_ms = max(1000, int(self.config["interval"]) * 1000)
         self.root = tk.Tk()
-        self.root.title("Stock Widget")
+        self.root.title("股票盯盘")
         self.root.configure(bg=BG)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", 0.95)
+        self.root.attributes("-alpha", 0.96)
         self.root.bind("<ButtonPress-1>", self.start_move)
         self.root.bind("<B1-Motion>", self.on_move)
 
@@ -58,45 +60,53 @@ class StockWidget:
             padx=12,
             pady=10,
             highlightthickness=1,
-            highlightbackground="#374151",
+            highlightbackground=BORDER,
         )
         frame.pack(fill="both", expand=True)
 
         header = tk.Frame(frame, bg=PANEL)
         header.pack(fill="x")
-        tk.Label(header, text="Stocks", fg=TEXT, bg=PANEL, font=("Segoe UI", 11, "bold")).pack(side="left")
+        tk.Label(header, text="股票盯盘", fg=TEXT, bg=PANEL, font=("Microsoft YaHei UI", 11, "bold")).pack(side="left")
         self.time_label = tk.Label(header, text="--:--:--", fg=MUTED, bg=PANEL, font=("Consolas", 9))
         self.time_label.pack(side="left", padx=(8, 0))
 
         for text, command, bg in (
-            ("Add", self.open_add_dialog, "#2563eb"),
-            ("Edit", self.open_edit_dialog, "#374151"),
-            ("Open", self.open_selected_site, "#065f46"),
-            ("Del", self.delete_selected, "#7f1d1d"),
-            ("X", self.root.destroy, PANEL),
+            ("新增", self.open_add_dialog, "#2563eb"),
+            ("编辑", self.open_edit_dialog, "#374151"),
+            ("打开", self.open_selected_site, "#065f46"),
+            ("删除", self.delete_selected, "#7f1d1d"),
+            ("关闭", self.root.destroy, PANEL),
         ):
             tk.Button(
                 header,
                 text=text,
                 command=command,
-                fg=TEXT if text != "X" else MUTED,
+                fg=TEXT if text != "关闭" else MUTED,
                 bg=bg,
                 activebackground=bg,
                 activeforeground=TEXT,
                 relief="flat",
                 bd=0,
-                font=("Segoe UI", 8, "bold"),
-                padx=8 if text != "X" else 4,
-                pady=2 if text != "X" else 0,
+                font=("Microsoft YaHei UI", 8, "bold"),
+                padx=8 if text != "关闭" else 4,
+                pady=2 if text != "关闭" else 0,
             ).pack(side="right", padx=(4, 0))
 
         tk.Label(
             frame,
-            text="Click a row to select it, then Add/Edit/Open/Del",
+            text="点击一行后可编辑、打开或删除",
             fg=MUTED,
             bg=PANEL,
-            font=("Segoe UI", 8),
+            font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", pady=(4, 8))
+
+        self.empty_label = tk.Label(
+            frame,
+            text="暂无股票，点击“新增”开始添加",
+            fg=MUTED,
+            bg=PANEL,
+            font=("Microsoft YaHei UI", 9),
+        )
 
         self.list_container = tk.Frame(frame, bg=PANEL)
         self.list_container.pack(fill="both", expand=True)
@@ -121,12 +131,28 @@ class StockWidget:
             child.destroy()
         self.rows.clear()
 
+        if not self.config["stocks"]:
+            self.selected_symbol = None
+            self.empty_label.pack(anchor="w", pady=(0, 4))
+            self.bind_hover_events()
+            return
+
+        self.empty_label.pack_forget()
+
         for item in self.config["stocks"]:
             symbol = item["symbol"]
-            row = tk.Frame(self.list_container, bg=BG, padx=8, pady=6)
+            row = tk.Frame(
+                self.list_container,
+                bg=BG,
+                padx=8,
+                pady=6,
+                highlightthickness=2,
+                highlightbackground=BORDER,
+                highlightcolor=ACCENT,
+            )
             row.pack(fill="x", pady=4)
 
-            title = tk.Label(row, text=item["label"], fg=TEXT, bg=BG, font=("Segoe UI", 10, "bold"))
+            title = tk.Label(row, text=item["label"], fg=TEXT, bg=BG, font=("Microsoft YaHei UI", 10, "bold"))
             title.grid(row=0, column=0, sticky="w")
             code = tk.Label(row, text=symbol, fg=MUTED, bg=BG, font=("Consolas", 9))
             code.grid(row=1, column=0, sticky="w")
@@ -136,11 +162,11 @@ class StockWidget:
             change.grid(row=0, column=2, rowspan=2, sticky="e", padx=(12, 0))
 
             levels = ", ".join(f"{level:.2f}" for level in item["levels"]) or "-"
-            level_label = tk.Label(row, text=f"Levels {levels}", fg=MUTED, bg=BG, font=("Segoe UI", 8))
+            level_label = tk.Label(row, text=f"提醒位 {levels}", fg=MUTED, bg=BG, font=("Microsoft YaHei UI", 8))
             level_label.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
-            position_label = tk.Label(row, text="Cost --  Lots --", fg=MUTED, bg=BG, font=("Segoe UI", 8))
+            position_label = tk.Label(row, text="成本 --  持仓 --", fg=MUTED, bg=BG, font=("Microsoft YaHei UI", 8))
             position_label.grid(row=3, column=0, columnspan=2, sticky="w", pady=(2, 0))
-            profit_label = tk.Label(row, text="P/L --", fg=MUTED, bg=BG, font=("Consolas", 9, "bold"))
+            profit_label = tk.Label(row, text="盈亏 --", fg=MUTED, bg=BG, font=("Consolas", 9, "bold"))
             profit_label.grid(row=3, column=2, sticky="e", pady=(2, 0))
             row.grid_columnconfigure(1, weight=1)
 
@@ -159,21 +185,21 @@ class StockWidget:
                 "widgets": widgets,
             }
 
-        if self.config["stocks"]:
-            available = {item["symbol"] for item in self.config["stocks"]}
-            if self.selected_symbol not in available:
-                self.selected_symbol = self.config["stocks"][0]["symbol"]
-            self.select_symbol(self.selected_symbol)
-        else:
-            self.selected_symbol = None
+        available = {item["symbol"] for item in self.config["stocks"]}
+        if self.selected_symbol not in available:
+            self.selected_symbol = self.config["stocks"][0]["symbol"]
+        self.select_symbol(self.selected_symbol)
         self.bind_hover_events()
 
     def select_symbol(self, symbol: str | None) -> None:
         self.selected_symbol = symbol
         for row_symbol, parts in self.rows.items():
-            color = SELECTED if row_symbol == symbol else BG
+            is_selected = row_symbol == symbol
+            bg = SELECTED if is_selected else BG
+            border = ACCENT if is_selected else BORDER
+            parts["frame"].configure(bg=bg, highlightbackground=border, highlightcolor=border)
             for widget in parts["widgets"]:
-                widget.configure(bg=color)
+                widget.configure(bg=bg)
 
     def place_bottom_right(self) -> None:
         self.root.update_idletasks()
@@ -253,7 +279,7 @@ class StockWidget:
 
     def open_selected_site(self) -> None:
         if not self.selected_symbol:
-            messagebox.showinfo("Open stock", "Please select a stock first.")
+            messagebox.showinfo("打开股票", "请先选择一只股票。")
             return
         current = next((item for item in self.config["stocks"] if item["symbol"] == self.selected_symbol), None)
         if not current:
@@ -263,7 +289,7 @@ class StockWidget:
 
     def open_edit_dialog(self) -> None:
         if not self.selected_symbol:
-            messagebox.showinfo("Edit stock", "Please select a stock first.")
+            messagebox.showinfo("编辑股票", "请先选择一只股票。")
             return
         current = next((item for item in self.config["stocks"] if item["symbol"] == self.selected_symbol), None)
         if current:
@@ -271,7 +297,7 @@ class StockWidget:
 
     def open_stock_dialog(self, current: dict | None = None) -> None:
         dialog = tk.Toplevel(self.root)
-        dialog.title("Edit stock" if current else "Add stock")
+        dialog.title("编辑股票" if current else "新增股票")
         dialog.configure(bg=PANEL)
         dialog.attributes("-topmost", True)
         dialog.transient(self.root)
@@ -288,14 +314,14 @@ class StockWidget:
         )
 
         fields = (
-            ("Symbol", symbol_var),
-            ("Label", label_var),
-            ("Cost", cost_var),
-            ("Lots", lots_var),
-            ("Levels", levels_var),
+            ("代码", symbol_var),
+            ("名称", label_var),
+            ("成本价", cost_var),
+            ("持仓手数", lots_var),
+            ("提醒位", levels_var),
         )
         for idx, (label, variable) in enumerate(fields):
-            tk.Label(dialog, text=label, fg=TEXT, bg=PANEL, font=("Segoe UI", 9)).grid(
+            tk.Label(dialog, text=label, fg=TEXT, bg=PANEL, font=("Microsoft YaHei UI", 9)).grid(
                 row=idx, column=0, sticky="w", padx=12, pady=(12 if idx == 0 else 8, 0)
             )
             tk.Entry(dialog, textvariable=variable, width=28).grid(
@@ -304,10 +330,10 @@ class StockWidget:
 
         tk.Label(
             dialog,
-            text="Cost=成本价, Lots=手数, Levels example: 7.6, 7.2",
+            text="提醒位示例：7.6, 7.2；持仓手数按 1 手 = 100 股计算",
             fg=MUTED,
             bg=PANEL,
-            font=("Segoe UI", 8),
+            font=("Microsoft YaHei UI", 8),
         ).grid(row=5, column=0, columnspan=2, sticky="w", padx=12, pady=(8, 0))
 
         def on_save() -> None:
@@ -317,26 +343,26 @@ class StockWidget:
             lots_text = lots_var.get().strip()
             level_text = levels_var.get().strip()
             if not symbol:
-                messagebox.showerror("Save stock", "Symbol is required.")
+                messagebox.showerror("保存股票", "股票代码不能为空。")
                 return
             try:
                 normalized = re.sub(r"[，、；;\s]+", ",", level_text)
                 levels = [float(part.strip()) for part in normalized.split(",") if part.strip()]
             except ValueError:
-                messagebox.showerror("Save stock", "Levels must be numbers separated by commas.")
+                messagebox.showerror("保存股票", "提醒位必须是数字，并使用逗号分隔。")
                 return
             try:
                 cost_price = float(cost_text) if cost_text else None
             except ValueError:
-                messagebox.showerror("Save stock", "Cost must be a valid number.")
+                messagebox.showerror("保存股票", "成本价格式不正确。")
                 return
             try:
                 lots = int(lots_text) if lots_text else 0
             except ValueError:
-                messagebox.showerror("Save stock", "Lots must be an integer.")
+                messagebox.showerror("保存股票", "持仓手数必须是整数。")
                 return
             if not levels:
-                messagebox.showerror("Save stock", "At least one level is required.")
+                messagebox.showerror("保存股票", "至少需要一个提醒位。")
                 return
 
             item = {
@@ -355,7 +381,7 @@ class StockWidget:
                         break
             else:
                 if any(existing["symbol"] == symbol for existing in self.config["stocks"]):
-                    messagebox.showerror("Save stock", "This symbol already exists.")
+                    messagebox.showerror("保存股票", "这只股票已经存在。")
                     return
                 self.config["stocks"].append(item)
 
@@ -365,8 +391,8 @@ class StockWidget:
 
         button_bar = tk.Frame(dialog, bg=PANEL)
         button_bar.grid(row=6, column=0, columnspan=2, sticky="e", padx=12, pady=12)
-        tk.Button(button_bar, text="Cancel", command=dialog.destroy).pack(side="right", padx=(8, 0))
-        tk.Button(button_bar, text="Save", command=on_save).pack(side="right")
+        tk.Button(button_bar, text="取消", command=dialog.destroy).pack(side="right", padx=(8, 0))
+        tk.Button(button_bar, text="保存", command=on_save).pack(side="right")
         dialog.grid_columnconfigure(1, weight=1)
         dialog.update_idletasks()
         root_x = self.root.winfo_x()
@@ -382,9 +408,9 @@ class StockWidget:
 
     def delete_selected(self) -> None:
         if not self.selected_symbol:
-            messagebox.showinfo("Delete stock", "Please select a stock first.")
+            messagebox.showinfo("删除股票", "请先选择一只股票。")
             return
-        if not messagebox.askyesno("Delete stock", f"Delete {self.selected_symbol}?"):
+        if not messagebox.askyesno("删除股票", f"确认删除 {self.selected_symbol} 吗？"):
             return
         self.config["stocks"] = [item for item in self.config["stocks"] if item["symbol"] != self.selected_symbol]
         self.selected_symbol = None
@@ -427,13 +453,13 @@ class StockWidget:
                     profit = (payload["price"] - float(cost_price)) * shares
                     profit_color = color_for_change(profit)
                     self.rows[symbol]["position"].configure(
-                        text=f"Cost {float(cost_price):.3f}  Lots {lots}",
+                        text=f"成本 {float(cost_price):.3f}  持仓 {lots} 手",
                         fg=MUTED,
                     )
-                    self.rows[symbol]["profit"].configure(text=f"P/L {profit:+.2f}", fg=profit_color)
+                    self.rows[symbol]["profit"].configure(text=f"盈亏 {profit:+.2f}", fg=profit_color)
                 else:
-                    self.rows[symbol]["position"].configure(text="Cost --  Lots --", fg=MUTED)
-                    self.rows[symbol]["profit"].configure(text="P/L --", fg=MUTED)
+                    self.rows[symbol]["position"].configure(text="成本 --  持仓 --", fg=MUTED)
+                    self.rows[symbol]["profit"].configure(text="盈亏 --", fg=MUTED)
                 self.rows[symbol]["title"].configure(text=title_text)
                 self.rows[symbol]["code"].configure(text=symbol)
                 self.rows[symbol]["price"].configure(text=f"{payload['price']:.2f}", fg=color)
@@ -443,21 +469,23 @@ class StockWidget:
                 )
             else:
                 self.rows[symbol]["price"].configure(text="ERR", fg=MUTED)
-                self.rows[symbol]["change"].configure(text="fetch err", fg=MUTED)
+                self.rows[symbol]["change"].configure(text="获取失败", fg=MUTED)
                 if stock_item and stock_item.get("cost_price") is not None and int(stock_item.get("lots", 0)) > 0:
                     self.rows[symbol]["position"].configure(
-                        text=f"Cost {float(stock_item['cost_price']):.3f}  Lots {int(stock_item['lots'])}",
+                        text=f"成本 {float(stock_item['cost_price']):.3f}  持仓 {int(stock_item['lots'])} 手",
                         fg=MUTED,
                     )
                 else:
-                    self.rows[symbol]["position"].configure(text="Cost --  Lots --", fg=MUTED)
-                self.rows[symbol]["profit"].configure(text="P/L --", fg=MUTED)
+                    self.rows[symbol]["position"].configure(text="成本 --  持仓 --", fg=MUTED)
+                self.rows[symbol]["profit"].configure(text="盈亏 --", fg=MUTED)
 
     def refresh(self) -> None:
         self.time_label.configure(text=dt.datetime.now().strftime("%H:%M:%S"))
-        if not self.fetch_inflight:
+        if not self.fetch_inflight and self.config["stocks"]:
             self.fetch_inflight = True
             self.fetch_quotes_async()
+        elif not self.config["stocks"]:
+            self.fetch_inflight = False
 
         self.root.after(self.interval_ms, self.refresh)
 
@@ -466,8 +494,8 @@ class StockWidget:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Show a bottom-right realtime stock widget.")
-    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to JSON config file")
+    parser = argparse.ArgumentParser(description="显示右下角股票实时小窗。")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="JSON 配置文件路径")
     return parser.parse_args()
 
 

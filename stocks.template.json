@@ -1,0 +1,5 @@
+{
+  "interval": 1,
+  "log_file": "stock_monitor.log",
+  "stocks": []
+}
