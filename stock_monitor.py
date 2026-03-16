@@ -1,9 +1,10 @@
 import argparse
 import datetime as dt
-import html
+import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import winsound
@@ -25,39 +26,88 @@ def log(message: str, log_file: pathlib.Path | None) -> None:
 
 
 def show_windows_notification(title: str, message: str) -> tuple[bool, str]:
-    safe_title = html.escape(title, quote=False)
-    safe_message = html.escape(message.replace("\n", " "), quote=False)
-    ps = f"""
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+    pythonw = pathlib.Path(sys.executable).with_name("pythonw.exe")
+    temp_dir = pathlib.Path(tempfile.gettempdir()) / "stockdesk_notifications"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    popup_code = r"""
+import json
+import tkinter as tk
+from pathlib import Path
 
-$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$xml.LoadXml(@"
-<toast activationType="foreground">
-  <visual>
-    <binding template="ToastGeneric">
-      <text>{safe_title}</text>
-      <text>{safe_message}</text>
-    </binding>
-  </visual>
-</toast>
-"@)
+payload = json.loads(Path(__PAYLOAD__).read_text(encoding="utf-8"))
+TITLE = payload["title"]
+MESSAGE = payload["message"]
 
-$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Microsoft.Windows.Explorer")
-$notifier.Show($toast)
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
+root.configure(bg="#111827")
+
+frame = tk.Frame(root, bg="#111827", highlightthickness=1, highlightbackground="#374151", padx=16, pady=14)
+frame.pack(fill="both", expand=True)
+
+header = tk.Frame(frame, bg="#111827")
+header.pack(fill="x")
+tk.Label(
+    header,
+    text=TITLE,
+    fg="#f9fafb",
+    bg="#111827",
+    font=("Microsoft YaHei UI", 11, "bold"),
+).pack(side="left", anchor="w")
+tk.Button(
+    header,
+    text="关闭",
+    command=root.destroy,
+    fg="#d1d5db",
+    bg="#1f2937",
+    activebackground="#374151",
+    activeforeground="#ffffff",
+    relief="flat",
+    bd=0,
+    padx=8,
+    pady=2,
+    font=("Microsoft YaHei UI", 8, "bold"),
+).pack(side="right")
+
+tk.Label(
+    frame,
+    text=MESSAGE,
+    fg="#d1d5db",
+    bg="#111827",
+    justify="left",
+    font=("Microsoft YaHei UI", 9),
+).pack(anchor="w", pady=(10, 0))
+
+root.update_idletasks()
+width = max(360, root.winfo_reqwidth())
+height = root.winfo_reqheight()
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+x = screen_width - width - 20
+y = screen_height - height - 80
+root.geometry(f"{width}x{height}+{x}+{y}")
+root.mainloop()
 """
-    result = subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"],
-        input=ps,
-        capture_output=True,
-        text=True,
-        timeout=15,
-        check=False,
+    stamp = str(int(time.time() * 1000))
+    payload_path = temp_dir / f"{stamp}.json"
+    popup_path = temp_dir / f"{stamp}.py"
+    payload_path.write_text(
+        json.dumps({"title": title, "message": message}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    popup_path.write_text(
+        popup_code.replace("__PAYLOAD__", repr(str(payload_path))),
+        encoding="utf-8",
+    )
+
+    result = subprocess.Popen(
+        [str(pythonw), str(popup_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    error_text = (result.stderr or result.stdout or "").strip()
-    return result.returncode == 0, error_text
+    return result.poll() is None, ""
 
 
 def toast(title: str, message: str, log_file: pathlib.Path | None) -> None:
@@ -69,11 +119,16 @@ def toast(title: str, message: str, log_file: pathlib.Path | None) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Monitor one or more A-share quotes and show Windows notifications when price levels are crossed."
+        description="Monitor A-share quotes and show alert popups when levels are reached."
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to JSON config file")
     parser.add_argument("--interval", type=int, help="override poll interval in seconds")
     parser.add_argument("--once", action="store_true", help="fetch one round of quotes and exit")
+    parser.add_argument(
+        "--test-notification",
+        action="store_true",
+        help="show a built-in Chinese notification test and exit",
+    )
     return parser.parse_args()
 
 
@@ -113,7 +168,8 @@ def maybe_reload_config(
 
     if last_mtime is not None and mtime == last_mtime:
         config = load_config(config_path)
-        return config, last_mtime, state, pathlib.Path(config["log_file"]) if config.get("log_file") else None
+        next_log_file = pathlib.Path(config["log_file"]) if config.get("log_file") else None
+        return config, last_mtime, state, next_log_file
 
     config = load_config(config_path)
     next_log_file = pathlib.Path(config["log_file"]) if config.get("log_file") else None
@@ -126,40 +182,54 @@ def maybe_reload_config(
     return config, mtime, next_state, next_log_file
 
 
+def maybe_notify_initial_state(quote: dict, levels: list[float], log_file: pathlib.Path | None) -> None:
+    price = quote["price"]
+    symbol = quote["symbol"]
+
+    exact_levels = [level for level in levels if abs(price - level) < 0.0001]
+    if exact_levels:
+        for level in exact_levels:
+            title = f"{quote['name']} 价格提醒"
+            message = (
+                f"{quote['name']}({symbol}) 当前已到达提醒位 {level:.2f}\n"
+                f"当前价格: {price:.2f}\n时间: {now_text()}"
+            )
+            log(f"ALERT {quote['name']}({symbol}) reached {level:.2f}, current={price:.2f}", log_file)
+            toast(title, message, log_file)
+        return
+
+    if len(levels) >= 2:
+        top_level = max(levels)
+        bottom_level = min(levels)
+        if price > top_level:
+            title = f"{quote['name']} 价格提醒"
+            message = (
+                f"{quote['name']}({symbol}) 当前已高于设定区间上沿 {top_level:.2f}\n"
+                f"当前价格: {price:.2f}\n时间: {now_text()}"
+            )
+            log(f"ALERT {quote['name']}({symbol}) above range top={top_level:.2f}, current={price:.2f}", log_file)
+            toast(title, message, log_file)
+        elif price < bottom_level:
+            title = f"{quote['name']} 价格提醒"
+            message = (
+                f"{quote['name']}({symbol}) 当前已低于设定区间下沿 {bottom_level:.2f}\n"
+                f"当前价格: {price:.2f}\n时间: {now_text()}"
+            )
+            log(
+                f"ALERT {quote['name']}({symbol}) below range bottom={bottom_level:.2f}, current={price:.2f}",
+                log_file,
+            )
+            toast(title, message, log_file)
+
+
 def check_crossings(state: dict, quote: dict, log_file: pathlib.Path | None) -> None:
     symbol = quote["symbol"]
     price = quote["price"]
     stock_state = state[symbol]
     levels = stock_state["levels"]
 
-    # If the app starts while price is already outside the configured range,
-    # notify once instead of waiting for a future crossing.
     if not stock_state.get("initialized"):
-        if len(levels) >= 2:
-            top_level = max(levels)
-            bottom_level = min(levels)
-            if price > top_level:
-                title = f"{quote['name']} 价格提醒"
-                message = (
-                    f"{quote['name']}({symbol}) 当前已高于设定区间上限 {top_level:.2f}\n"
-                    f"当前价格: {price:.2f}\n时间: {now_text()}"
-                )
-                log(
-                    f"ALERT {quote['name']}({symbol}) above range top={top_level:.2f}, current={price:.2f}",
-                    log_file,
-                )
-                toast(title, message, log_file)
-            elif price < bottom_level:
-                title = f"{quote['name']} 价格提醒"
-                message = (
-                    f"{quote['name']}({symbol}) 当前已低于设定区间下限 {bottom_level:.2f}\n"
-                    f"当前价格: {price:.2f}\n时间: {now_text()}"
-                )
-                log(
-                    f"ALERT {quote['name']}({symbol}) below range bottom={bottom_level:.2f}, current={price:.2f}",
-                    log_file,
-                )
-                toast(title, message, log_file)
+        maybe_notify_initial_state(quote, levels, log_file)
         stock_state["initialized"] = True
 
     for level in levels:
@@ -170,20 +240,17 @@ def check_crossings(state: dict, quote: dict, log_file: pathlib.Path | None) -> 
             stock_state["sides"][level] = current_side
             continue
 
-        crossed_up = previous_side in {"below", "equal"} and current_side == "above"
-        crossed_down = previous_side in {"above", "equal"} and current_side == "below"
+        reached_up = previous_side == "below" and current_side in {"equal", "above"}
+        reached_down = previous_side == "above" and current_side in {"equal", "below"}
 
-        if crossed_up or crossed_down:
-            direction_text = "向上突破" if crossed_up else "向下跌破"
+        if reached_up or reached_down:
+            direction_text = "向上到达/突破" if reached_up else "向下到达/跌破"
             title = f"{quote['name']} 价格提醒"
             message = (
                 f"{quote['name']}({symbol}) 已{direction_text} {level:.2f}\n"
                 f"当前价格: {price:.2f}\n时间: {now_text()}"
             )
-            log(
-                f"ALERT {quote['name']}({symbol}) {direction_text} {level:.2f}, current={price:.2f}",
-                log_file,
-            )
+            log(f"ALERT {quote['name']}({symbol}) {direction_text} {level:.2f}, current={price:.2f}", log_file)
             toast(title, message, log_file)
 
         stock_state["sides"][level] = current_side
@@ -231,6 +298,15 @@ def run_monitor(config_path: pathlib.Path, interval_override: int | None = None,
 
 def main() -> int:
     args = parse_args()
+    if args.test_notification:
+        ok, error_text = show_windows_notification(
+            "股票盯盘测试提醒",
+            "这是一条程序内置的中文测试提醒。\n现在的提醒窗不会自动关闭，必须手动点击“关闭”。",
+        )
+        print(f"ok={ok}")
+        if error_text:
+            print(error_text)
+        return 0 if ok else 1
     return run_monitor(pathlib.Path(args.config), interval_override=args.interval, once=args.once)
 
 
