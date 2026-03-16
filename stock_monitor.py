@@ -84,6 +84,7 @@ def sync_state(state: dict, config: dict) -> dict:
             "levels": item["levels"],
             "sides": {level: old_sides.get(level) for level in item["levels"]},
             "market": item["market"],
+            "initialized": existing.get("initialized", False),
         }
     return next_state
 
@@ -118,8 +119,39 @@ def check_crossings(state: dict, quote: dict, log_file: pathlib.Path | None) -> 
     symbol = quote["symbol"]
     price = quote["price"]
     stock_state = state[symbol]
+    levels = stock_state["levels"]
 
-    for level in stock_state["levels"]:
+    # If the app starts while price is already outside the configured range,
+    # notify once instead of waiting for a future crossing.
+    if not stock_state.get("initialized"):
+        if len(levels) >= 2:
+            top_level = max(levels)
+            bottom_level = min(levels)
+            if price > top_level:
+                title = f"{quote['name']} 价格提醒"
+                message = (
+                    f"{quote['name']}({symbol}) 当前已高于设定区间上限 {top_level:.2f}\n"
+                    f"当前价格: {price:.2f}\n时间: {now_text()}"
+                )
+                log(
+                    f"ALERT {quote['name']}({symbol}) above range top={top_level:.2f}, current={price:.2f}",
+                    log_file,
+                )
+                toast(title, message, log_file)
+            elif price < bottom_level:
+                title = f"{quote['name']} 价格提醒"
+                message = (
+                    f"{quote['name']}({symbol}) 当前已低于设定区间下限 {bottom_level:.2f}\n"
+                    f"当前价格: {price:.2f}\n时间: {now_text()}"
+                )
+                log(
+                    f"ALERT {quote['name']}({symbol}) below range bottom={bottom_level:.2f}, current={price:.2f}",
+                    log_file,
+                )
+                toast(title, message, log_file)
+        stock_state["initialized"] = True
+
+    for level in levels:
         previous_side = stock_state["sides"].get(level)
         current_side = side_of(price, level)
 
