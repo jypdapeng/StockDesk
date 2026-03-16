@@ -1,5 +1,6 @@
 import argparse
 import datetime as dt
+import html
 import pathlib
 import subprocess
 import sys
@@ -24,17 +25,27 @@ def log(message: str, log_file: pathlib.Path | None) -> None:
 
 
 def show_windows_notification(title: str, message: str) -> tuple[bool, str]:
+    safe_title = html.escape(title, quote=False)
+    safe_message = html.escape(message.replace("\n", " "), quote=False)
     ps = f"""
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-$notify = New-Object System.Windows.Forms.NotifyIcon
-$notify.Icon = [System.Drawing.SystemIcons]::Information
-$notify.BalloonTipTitle = "{title.replace('"', '`"')}"
-$notify.BalloonTipText = "{message.replace('"', '`"').replace(chr(10), ' ')}"
-$notify.Visible = $true
-$notify.ShowBalloonTip(5000)
-Start-Sleep -Seconds 6
-$notify.Dispose()
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml(@"
+<toast activationType="foreground">
+  <visual>
+    <binding template="ToastGeneric">
+      <text>{safe_title}</text>
+      <text>{safe_message}</text>
+    </binding>
+  </visual>
+</toast>
+"@)
+
+$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Microsoft.Windows.Explorer")
+$notifier.Show($toast)
 """
     result = subprocess.run(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"],
