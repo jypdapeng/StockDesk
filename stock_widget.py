@@ -27,6 +27,10 @@ FLAT = "#f59e0b"
 SELECTED = "#0f172a"
 ACCENT = "#22c55e"
 BORDER = "#374151"
+BUTTON_BLUE = "#2563eb"
+BUTTON_GREEN = "#065f46"
+BUTTON_PURPLE = "#7c3aed"
+BUTTON_RED = "#7f1d1d"
 DONATE_ALIPAY = RESOURCE_DIR / "assets" / "donate_alipay.jpg"
 DONATE_WECHAT = RESOURCE_DIR / "assets" / "donate_wechat.jpg"
 
@@ -50,9 +54,13 @@ class StockWidget:
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.96)
-        self.root.bind("<ButtonPress-1>", self.start_move)
-        self.root.bind("<B1-Motion>", self.on_move)
 
+        widget_cfg = self.config.get("widget", {})
+        self.show_title = bool(widget_cfg.get("show_title", False))
+        self.anchor_side = widget_cfg.get("dock_side", "right") if widget_cfg.get("dock_side") in {"left", "right"} else "right"
+        self.saved_y = int(widget_cfg.get("y", 80))
+
+        self.dragging = False
         self.drag_x = 0
         self.drag_y = 0
         self.selected_symbol: str | None = None
@@ -62,7 +70,11 @@ class StockWidget:
         self.hidden = False
         self.visible_strip = 14
 
-        frame = tk.Frame(
+        self.root.bind("<ButtonPress-1>", self.start_move)
+        self.root.bind("<B1-Motion>", self.on_move)
+        self.root.bind("<ButtonRelease-1>", self.end_move)
+
+        self.frame = tk.Frame(
             self.root,
             bg=PANEL,
             padx=12,
@@ -70,24 +82,35 @@ class StockWidget:
             highlightthickness=1,
             highlightbackground=BORDER,
         )
-        frame.pack(fill="both", expand=True)
+        self.frame.pack(fill="both", expand=True)
 
-        header = tk.Frame(frame, bg=PANEL)
-        header.pack(fill="x")
-        tk.Label(header, text="股票盯盘", fg=TEXT, bg=PANEL, font=("Microsoft YaHei UI", 11, "bold")).pack(side="left")
-        self.time_label = tk.Label(header, text="--:--:--", fg=MUTED, bg=PANEL, font=("Consolas", 9))
+        self.header = tk.Frame(self.frame, bg=PANEL)
+        self.header.pack(fill="x")
+        self.title_label = tk.Label(
+            self.header,
+            text="股票盯盘",
+            fg=TEXT,
+            bg=PANEL,
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        if self.show_title:
+            self.title_label.pack(side="left")
+
+        self.time_label = tk.Label(self.header, text="--:--:--", fg=MUTED, bg=PANEL, font=("Consolas", 9))
         self.time_label.pack(side="left", padx=(8, 0))
 
-        for text, command, bg in (
-            ("新增", self.open_add_dialog, "#2563eb"),
-            ("编辑", self.open_edit_dialog, "#374151"),
-            ("打开", self.open_selected_site, "#065f46"),
-            ("赞赏", self.open_donate_dialog, "#7c3aed"),
-            ("删除", self.delete_selected, "#7f1d1d"),
+        button_defs = (
+            ("新增", self.open_add_dialog, BUTTON_BLUE),
+            ("编辑", self.open_edit_dialog, BORDER),
+            ("打开", self.open_selected_site, BUTTON_GREEN),
+            ("赞赏", self.open_donate_dialog, BUTTON_PURPLE),
+            ("标题", self.toggle_title_visibility, BORDER),
+            ("删除", self.delete_selected, BUTTON_RED),
             ("关闭", self.root.destroy, PANEL),
-        ):
-            tk.Button(
-                header,
+        )
+        for text, command, bg in button_defs:
+            button = tk.Button(
+                self.header,
                 text=text,
                 command=command,
                 fg=TEXT if text != "关闭" else MUTED,
@@ -99,41 +122,66 @@ class StockWidget:
                 font=("Microsoft YaHei UI", 8, "bold"),
                 padx=8 if text != "关闭" else 4,
                 pady=2 if text != "关闭" else 0,
-            ).pack(side="right", padx=(4, 0))
+            )
+            button.pack(side="right", padx=(4, 0))
 
-        tk.Label(
-            frame,
-            text="点击一行后可编辑、打开、赞赏或删除",
+        self.tip_label = tk.Label(
+            self.frame,
+            text="可拖动到桌面任意位置，松手后自动吸附左侧或右侧",
             fg=MUTED,
             bg=PANEL,
             font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(4, 8))
+        )
+        self.tip_label.pack(anchor="w", pady=(4, 8))
 
         self.empty_label = tk.Label(
-            frame,
+            self.frame,
             text="暂无股票，点击“新增”开始添加",
             fg=MUTED,
             bg=PANEL,
             font=("Microsoft YaHei UI", 9),
         )
 
-        self.list_container = tk.Frame(frame, bg=PANEL)
+        self.list_container = tk.Frame(self.frame, bg=PANEL)
         self.list_container.pack(fill="both", expand=True)
         self.build_rows()
 
         self.bind_hover_events()
-        self.place_bottom_right()
-        self.hide_to_right_edge()
+        self.place_initial_position()
+        if self.config["stocks"]:
+            self.hide_to_edge()
         self.refresh()
 
     def bind_hover_events(self) -> None:
         widgets = [self.root]
-        widgets.extend(self.root.winfo_children())
-        for child in self.root.winfo_children():
-            widgets.extend(child.winfo_children())
+        stack = list(self.root.winfo_children())
+        while stack:
+            widget = stack.pop()
+            widgets.append(widget)
+            stack.extend(widget.winfo_children())
         for widget in widgets:
             widget.bind("<Enter>", self.on_mouse_enter, add="+")
             widget.bind("<Leave>", self.on_mouse_leave, add="+")
+            widget.bind("<ButtonPress-1>", self.start_move, add="+")
+            widget.bind("<B1-Motion>", self.on_move, add="+")
+            widget.bind("<ButtonRelease-1>", self.end_move, add="+")
+
+    def toggle_title_visibility(self) -> None:
+        self.show_title = not self.show_title
+        if self.show_title:
+            self.title_label.pack(side="left", before=self.time_label)
+        else:
+            self.title_label.pack_forget()
+        self.save_widget_preferences()
+        self.root.update_idletasks()
+        self.snap_to_edge(self.anchor_side)
+
+    def save_widget_preferences(self) -> None:
+        widget_cfg = self.config.setdefault("widget", {})
+        widget_cfg["show_title"] = self.show_title
+        widget_cfg["dock_side"] = self.anchor_side
+        widget_cfg["y"] = max(0, int(self.root.winfo_y()))
+        save_config(self.config_path, self.config)
 
     def build_rows(self) -> None:
         for child in self.list_container.winfo_children():
@@ -181,7 +229,7 @@ class StockWidget:
 
             widgets = [row, title, code, price, change, level_label, position_label, profit_label]
             for widget in widgets:
-                widget.bind("<Button-1>", lambda event, s=symbol: self.select_symbol(s))
+                widget.bind("<Button-1>", lambda event, s=symbol: self.select_symbol(s), add="+")
 
             self.rows[symbol] = {
                 "frame": row,
@@ -210,39 +258,59 @@ class StockWidget:
             for widget in parts["widgets"]:
                 widget.configure(bg=bg)
 
-    def place_bottom_right(self) -> None:
+    def place_initial_position(self) -> None:
         self.root.update_idletasks()
-        width = self.root.winfo_reqwidth()
         height = self.root.winfo_reqheight()
+        screen_height = self.root.winfo_screenheight()
+        clamped_y = max(10, min(self.saved_y, max(10, screen_height - height - 60)))
+        self.saved_y = clamped_y
+        self.snap_to_edge(self.anchor_side, persist=False)
+
+    def snap_to_edge(self, side: str, persist: bool = True) -> None:
+        self.root.update_idletasks()
+        width = self.root.winfo_width() or self.root.winfo_reqwidth()
+        height = self.root.winfo_height() or self.root.winfo_reqheight()
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        x = screen_width - width - 24
-        y = screen_height - height - 64
+        y = max(10, min(self.saved_y, max(10, screen_height - height - 60)))
+        x = 0 if side == "left" else screen_width - width
+        self.anchor_side = side
+        self.saved_y = y
         self.root.geometry(f"+{x}+{y}")
         self.hidden = False
+        if persist:
+            self.save_widget_preferences()
 
-    def hide_to_right_edge(self) -> None:
+    def hide_to_edge(self) -> None:
         self.root.update_idletasks()
-        x = self.root.winfo_screenwidth() - self.visible_strip
-        y = self.root.winfo_y()
+        width = self.root.winfo_width() or self.root.winfo_reqwidth()
+        y = self.saved_y
+        if self.anchor_side == "left":
+            x = -(width - self.visible_strip)
+        else:
+            x = self.root.winfo_screenwidth() - self.visible_strip
         self.root.geometry(f"+{x}+{y}")
         self.hidden = True
 
-    def show_from_right_edge(self) -> None:
+    def show_from_edge(self) -> None:
         self.root.update_idletasks()
         width = self.root.winfo_width() or self.root.winfo_reqwidth()
-        x = self.root.winfo_screenwidth() - width
-        y = self.root.winfo_y()
+        y = self.saved_y
+        x = 0 if self.anchor_side == "left" else self.root.winfo_screenwidth() - width
         self.root.geometry(f"+{x}+{y}")
         self.hidden = False
 
     def schedule_hide(self) -> None:
+        if self.dragging or not self.config["stocks"]:
+            return
         if self.hide_job:
             self.root.after_cancel(self.hide_job)
-        self.hide_job = self.root.after(250, self.hide_if_pointer_outside)
+        self.hide_job = self.root.after(300, self.hide_if_pointer_outside)
 
     def hide_if_pointer_outside(self) -> None:
         self.hide_job = None
+        if self.dragging:
+            return
         pointer_x = self.root.winfo_pointerx()
         pointer_y = self.root.winfo_pointery()
         left = self.root.winfo_x()
@@ -251,37 +319,72 @@ class StockWidget:
         bottom = top + self.root.winfo_height()
         if left <= pointer_x <= right and top <= pointer_y <= bottom:
             return
-        self.hide_to_right_edge()
+        self.hide_to_edge()
 
     def on_mouse_enter(self, _event=None) -> None:
         if self.hide_job:
             self.root.after_cancel(self.hide_job)
             self.hide_job = None
         if self.hidden:
-            self.show_from_right_edge()
+            self.show_from_edge()
 
     def on_mouse_leave(self, _event=None) -> None:
         self.schedule_hide()
 
     def start_move(self, event) -> None:
-        self.drag_x = event.x
-        self.drag_y = event.y
+        widget_name = event.widget.winfo_class()
+        if widget_name in {"Button", "Entry"}:
+            return
+        self.dragging = True
+        self.drag_x = event.x_root - self.root.winfo_x()
+        self.drag_y = event.y_root - self.root.winfo_y()
+        if self.hide_job:
+            self.root.after_cancel(self.hide_job)
+            self.hide_job = None
+        if self.hidden:
+            self.show_from_edge()
 
     def on_move(self, event) -> None:
+        if not self.dragging:
+            return
         x = event.x_root - self.drag_x
         y = event.y_root - self.drag_y
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = self.root.winfo_width() or self.root.winfo_reqwidth()
+        height = self.root.winfo_height() or self.root.winfo_reqheight()
+        x = max(-width + self.visible_strip, min(x, screen_width - self.visible_strip))
+        y = max(10, min(y, screen_height - height - 60))
+        self.saved_y = y
         self.root.geometry(f"+{x}+{y}")
         self.hidden = False
+
+    def end_move(self, _event=None) -> None:
+        if not self.dragging:
+            return
+        self.dragging = False
+        pointer_x = self.root.winfo_pointerx()
+        screen_mid = self.root.winfo_screenwidth() // 2
+        side = "left" if pointer_x < screen_mid else "right"
+        self.snap_to_edge(side)
 
     def save_and_reload(self) -> None:
         save_config(self.config_path, self.config)
         self.config = load_config(self.config_path)
         self.interval_ms = max(1000, int(self.config["interval"]) * 1000)
+        widget_cfg = self.config.get("widget", {})
+        self.show_title = bool(widget_cfg.get("show_title", self.show_title))
+        self.anchor_side = widget_cfg.get("dock_side", self.anchor_side)
+        self.saved_y = int(widget_cfg.get("y", self.saved_y))
         self.build_rows()
+        if self.show_title and not self.title_label.winfo_manager():
+            self.title_label.pack(side="left", before=self.time_label)
+        if not self.show_title and self.title_label.winfo_manager():
+            self.title_label.pack_forget()
         if self.hidden:
-            self.hide_to_right_edge()
+            self.hide_to_edge()
         else:
-            self.show_from_right_edge()
+            self.snap_to_edge(self.anchor_side, persist=False)
 
     def open_add_dialog(self) -> None:
         self.open_stock_dialog()
@@ -304,8 +407,20 @@ class StockWidget:
         dialog.transient(self.root)
         dialog.grab_set()
 
-        tk.Label(dialog, text="如果这个软件对你有帮助，欢迎打赏支持。", fg=TEXT, bg=PANEL, font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w", padx=16, pady=(16, 8))
-        tk.Label(dialog, text="感谢你的支持。", fg=MUTED, bg=PANEL, font=("Microsoft YaHei UI", 8)).pack(anchor="w", padx=16, pady=(0, 12))
+        tk.Label(
+            dialog,
+            text="如果这个软件对你有帮助，欢迎赞赏支持。",
+            fg=TEXT,
+            bg=PANEL,
+            font=("Microsoft YaHei UI", 10, "bold"),
+        ).pack(anchor="w", padx=16, pady=(16, 8))
+        tk.Label(
+            dialog,
+            text="感谢你的支持。",
+            fg=MUTED,
+            bg=PANEL,
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=16, pady=(0, 12))
 
         content = tk.Frame(dialog, bg=PANEL)
         content.pack(fill="both", expand=True, padx=16, pady=(0, 12))
@@ -317,16 +432,7 @@ class StockWidget:
         footer.pack(fill="x", padx=16, pady=(0, 16))
         tk.Button(footer, text="关闭", command=dialog.destroy).pack(side="right")
 
-        dialog.update_idletasks()
-        root_x = self.root.winfo_x()
-        root_y = self.root.winfo_y()
-        root_w = self.root.winfo_width()
-        root_h = self.root.winfo_height()
-        dialog_w = dialog.winfo_reqwidth()
-        dialog_h = dialog.winfo_reqheight()
-        x = root_x + max(0, (root_w - dialog_w) // 2)
-        y = root_y + max(0, (root_h - dialog_h) // 2)
-        dialog.geometry(f"+{x}+{y}")
+        self.center_dialog(dialog)
         dialog.bind("<Enter>", self.on_mouse_enter, add="+")
 
     def render_donate_card(self, parent: tk.Widget, title: str, image_path: pathlib.Path) -> None:
@@ -373,9 +479,7 @@ class StockWidget:
             value=f"{float(current['cost_price']):.3f}" if current and current.get("cost_price") not in (None, "") else ""
         )
         lots_var = tk.StringVar(value=str(current.get("lots", 0)) if current and current.get("lots", 0) else "")
-        levels_var = tk.StringVar(
-            value=", ".join(str(level) for level in current.get("levels", [])) if current else ""
-        )
+        levels_var = tk.StringVar(value=", ".join(str(level) for level in current.get("levels", [])) if current else "")
 
         fields = (
             ("代码", symbol_var),
@@ -458,6 +562,10 @@ class StockWidget:
         tk.Button(button_bar, text="取消", command=dialog.destroy).pack(side="right", padx=(8, 0))
         tk.Button(button_bar, text="保存", command=on_save).pack(side="right")
         dialog.grid_columnconfigure(1, weight=1)
+        self.center_dialog(dialog)
+        dialog.bind("<Enter>", self.on_mouse_enter, add="+")
+
+    def center_dialog(self, dialog: tk.Toplevel) -> None:
         dialog.update_idletasks()
         root_x = self.root.winfo_x()
         root_y = self.root.winfo_y()
@@ -468,7 +576,6 @@ class StockWidget:
         x = root_x + max(0, (root_w - dialog_w) // 2)
         y = root_y + max(0, (root_h - dialog_h) // 2)
         dialog.geometry(f"+{x}+{y}")
-        dialog.bind("<Enter>", self.on_mouse_enter, add="+")
 
     def delete_selected(self) -> None:
         if not self.selected_symbol:
@@ -558,7 +665,7 @@ class StockWidget:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="显示右下角股票实时小窗。")
+    parser = argparse.ArgumentParser(description="显示可拖动吸附的股票盯盘小窗。")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="JSON 配置文件路径")
     return parser.parse_args()
 

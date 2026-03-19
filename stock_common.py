@@ -21,6 +21,11 @@ def default_config_payload() -> dict:
         "interval": 1,
         "log_file": str(APP_DIR / "stock_monitor.log"),
         "stocks": [],
+        "widget": {
+            "show_title": False,
+            "dock_side": "right",
+            "y": 80,
+        },
     }
 
 
@@ -102,7 +107,17 @@ def load_config(path: pathlib.Path | None = None) -> dict:
             }
         )
 
-    return {"interval": interval, "stocks": stocks, "log_file": data.get("log_file")}
+    widget = data.get("widget", {}) if isinstance(data.get("widget"), dict) else {}
+    return {
+        "interval": interval,
+        "stocks": stocks,
+        "log_file": data.get("log_file"),
+        "widget": {
+            "show_title": bool(widget.get("show_title", False)),
+            "dock_side": widget.get("dock_side", "right") if widget.get("dock_side") in {"left", "right"} else "right",
+            "y": int(widget.get("y", 80)),
+        },
+    }
 
 
 def save_config(path: pathlib.Path, config: dict) -> None:
@@ -111,6 +126,11 @@ def save_config(path: pathlib.Path, config: dict) -> None:
         "interval": int(config.get("interval", 30)),
         "log_file": config.get("log_file"),
         "stocks": [],
+        "widget": {
+            "show_title": bool(config.get("widget", {}).get("show_title", False)),
+            "dock_side": config.get("widget", {}).get("dock_side", "right"),
+            "y": int(config.get("widget", {}).get("y", 80)),
+        },
     }
     for item in config.get("stocks", []):
         stock = {
