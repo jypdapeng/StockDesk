@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.log
+output/
 
 build/
 dist/
@@ -11,3 +12,5 @@ StockDesk.spec
 .venv/
 venv/
 tmp-skill-check.mjs
+ai_settings.json
+ai_chat_history.json
