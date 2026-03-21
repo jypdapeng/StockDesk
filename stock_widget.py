@@ -212,6 +212,9 @@ class StockWidget:
         menu.add_separator()
         menu.add_command(label="加仓", command=lambda: self.open_trade_dialog("add"))
         menu.add_command(label="减仓", command=lambda: self.open_trade_dialog("reduce"))
+        menu.add_command(label="买入", command=self.buy_selected_from_favorite)
+        menu.add_command(label="加收藏", command=self.add_selected_to_favorite)
+        menu.add_command(label="置顶/取消置顶", command=self.toggle_pin_selected)
         menu.add_separator()
         menu.add_command(label="打开网页", command=self.open_selected_site)
         menu.add_command(label="相关新闻", command=self.open_news_panel)
@@ -292,8 +295,9 @@ class StockWidget:
 
     def sorted_visible_stocks(self):
         visible = list(self.visible_stocks())
+        visible = sorted(visible, key=lambda item: (0 if item.get("pinned") else 1, str(item.get("label", item.get("symbol", "")))))
         if self.sort_by != "default":
-            visible = sorted(visible, key=self._item_sort_value, reverse=self.sort_desc)
+            visible = sorted(visible, key=lambda item: (0 if item.get("pinned") else 1, -self._item_sort_value(item) if self.sort_desc else self._item_sort_value(item)))
         return visible
 
     def find_stock(self, symbol):
@@ -426,10 +430,20 @@ class StockWidget:
             header_left.grid(row=0, column=0, sticky="w")
             title = tk.Label(header_left, text=item.get("label", symbol), fg=TEXT, bg=BG, font=("Microsoft YaHei UI", 10, "bold"))
             title.pack(side="left")
+            if item.get("pinned"):
+                tk.Label(header_left, text="置顶", fg="#fef3c7", bg="#92400e", font=("Microsoft YaHei UI", 7, "bold"), padx=6, pady=1).pack(side="left", padx=(6, 0))
             manual_btn = tk.Button(header_left, text="✎", command=lambda s=symbol: self.open_manual_mark_dialog(s), fg=TEXT, bg=BORDER, activebackground=BUTTON_BLUE, activeforeground=TEXT, relief="flat", bd=0, padx=4, pady=0, font=("Microsoft YaHei UI", 8, "bold"), cursor="hand2")
             manual_btn.pack(side="left", padx=(6, 4))
             ai_btn = tk.Button(header_left, text="!", command=lambda s=symbol: self.open_ai_news_mark_dialog(s), fg=TEXT, bg=BUTTON_RED, activebackground=BUTTON_RED, activeforeground=TEXT, relief="flat", bd=0, padx=6, pady=0, font=("Microsoft YaHei UI", 8, "bold"), cursor="hand2")
             ai_btn.pack(side="left")
+            pin_btn = tk.Button(header_left, text="置顶" if not item.get("pinned") else "取消置顶", command=lambda s=symbol: self.toggle_pin_selected(s), fg=TEXT, bg="#92400e", activebackground="#92400e", activeforeground=TEXT, relief="flat", bd=0, padx=6, pady=0, font=("Microsoft YaHei UI", 7, "bold"), cursor="hand2")
+            pin_btn.pack(side="left", padx=(6, 0))
+            if self.active_tab == "recommended":
+                fav_btn = tk.Button(header_left, text="加收藏", command=lambda s=symbol: self.add_selected_to_favorite(s), fg=TEXT, bg="#065f46", activebackground="#065f46", activeforeground=TEXT, relief="flat", bd=0, padx=6, pady=0, font=("Microsoft YaHei UI", 7, "bold"), cursor="hand2")
+                fav_btn.pack(side="left", padx=(6, 0))
+            elif self.active_tab == "favorite":
+                buy_btn = tk.Button(header_left, text="买入", command=lambda s=symbol: self.buy_selected_from_favorite(s), fg=TEXT, bg="#1d4ed8", activebackground="#1d4ed8", activeforeground=TEXT, relief="flat", bd=0, padx=6, pady=0, font=("Microsoft YaHei UI", 7, "bold"), cursor="hand2")
+                buy_btn.pack(side="left", padx=(6, 0))
             code = tk.Label(row, text=symbol, fg=MUTED, bg=BG, font=("Consolas", 9))
             code.grid(row=1, column=0, sticky="w")
             right_panel = tk.Frame(row, bg=BG)
@@ -561,6 +575,44 @@ class StockWidget:
         self.config["stocks"] = [item for item in self.all_stocks() if item.get("symbol") not in target_symbols]
         self.selected_symbol = None
         self.save_and_reload()
+
+    def toggle_pin_selected(self, symbol=None):
+        stock_item = self.find_stock(symbol or self.selected_symbol)
+        if not stock_item:
+            messagebox.showinfo("置顶", "请先选择一只股票。")
+            return
+        stock_item["pinned"] = not bool(stock_item.get("pinned", False))
+        self.save_and_reload()
+
+    def add_selected_to_favorite(self, symbol=None):
+        stock_item = self.find_stock(symbol or self.selected_symbol)
+        if not stock_item:
+            messagebox.showinfo("加收藏", "请先选择一只股票。")
+            return
+        current_status = str(stock_item.get("status", "favorite"))
+        if current_status == "favorite":
+            messagebox.showinfo("加收藏", "这只股票已经在收藏里了。")
+            return
+        if current_status == "holding":
+            messagebox.showinfo("加收藏", "这只股票当前在持有中，无需再加收藏。")
+            return
+        if current_status == "closed":
+            stock_item["status"] = "favorite"
+        elif current_status == "recommended":
+            stock_item["status"] = "favorite"
+        stock_item.setdefault("manual_mark", {})
+        stock_item["manual_mark"]["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.active_tab = "favorite"
+        self.selected_symbol = stock_item["symbol"]
+        self.save_and_reload()
+
+    def buy_selected_from_favorite(self, symbol=None):
+        stock_item = self.find_stock(symbol or self.selected_symbol)
+        if not stock_item:
+            messagebox.showinfo("买入", "请先选择一只股票。")
+            return
+        self.selected_symbol = stock_item["symbol"]
+        self.open_trade_dialog("add")
 
     def position_text(self, item):
         lots = int(item.get("lots", 0) or 0)

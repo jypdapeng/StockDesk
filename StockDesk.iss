@@ -1,5 +1,5 @@
 #define MyAppName "股票盯盘"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "Codex"
 #define MyAppExeName "StockDesk.exe"
 #define MyAppAssocName MyAppName + " App"

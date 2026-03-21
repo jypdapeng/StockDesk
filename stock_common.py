@@ -175,6 +175,7 @@ def load_config(path: pathlib.Path | None = None) -> dict:
                 "manual_mark": item.get("manual_mark", {}) if isinstance(item.get("manual_mark"), dict) else {},
                 "ai_mark": item.get("ai_mark", {}) if isinstance(item.get("ai_mark"), dict) else {},
                 "recommended_pick": item.get("recommended_pick", {}) if isinstance(item.get("recommended_pick"), dict) else {},
+                "pinned": bool(item.get("pinned", False)),
                 "import_source": item.get("import_source"),
                 "imported_at": item.get("imported_at"),
                 "last_import_source": item.get("last_import_source"),
@@ -246,6 +247,8 @@ def save_config(path: pathlib.Path, config: dict) -> None:
             stock["ai_mark"] = item["ai_mark"]
         if isinstance(item.get("recommended_pick"), dict) and item["recommended_pick"]:
             stock["recommended_pick"] = item["recommended_pick"]
+        if item.get("pinned"):
+            stock["pinned"] = True
         if item.get("import_source"):
             stock["import_source"] = item["import_source"]
         if item.get("imported_at"):
