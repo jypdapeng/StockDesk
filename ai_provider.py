@@ -489,36 +489,7 @@ def recommend_candidates_with_ai(market_snapshot: dict, candidates: list[dict]) 
     if not api_key:
         return {"enabled": False, "provider": provider, "content": f"{provider} 已配置但缺少 API Key。", "picks": []}
 
-    market_lines = [f"- {item['label']} {item['change_pct']:+.2f}%" for item in market_snapshot.get("indices", [])]
-    candidate_lines = []
-    for item in candidates[:18]:
-        candidate_lines.append(
-            (
-                f"- {item['label']}（{item['symbol']}）"
-                f" 评分={item['score']}"
-                f" 风险={item['risk']}"
-                f" 量化风险={item['quant_risk_label']}"
-                f" 新闻={item['news_bias']}"
-                f" 开盘={item['open_strength']}"
-                f" 尾盘={item['close_strength']}"
-                f" 一进二={item['one_to_two']}"
-                f" 预案={'；'.join(item['next_day_plan'][:1]) if item['next_day_plan'] else '暂无'}"
-            )
-        )
-
-    prompt = (
-        "你是一个保守型 A 股观察候选筛选助手。"
-        "请结合当前大盘环境、候选股走势、新闻偏向和风险，"
-        "从候选池里挑出最多 5 只更适合下一交易日观察的股票。"
-        "不要推荐明显弱势追击、冲高回落高风险、量化拥挤严重的标的。"
-        "输出严格 JSON，对象格式为："
-        '{"picks":[{"symbol":"代码","label":"名称","action":"观察/低吸观察/突破跟踪/等待","score":80,"reason":"推荐原因","playbook":"打法","risk_note":"风险提醒"}],"summary":"一段总说明"}'
-        "\n\n当前大盘：\n"
-        f"市场状态：{market_snapshot.get('mood', '未知')}\n"
-        + "\n".join(market_lines)
-        + "\n\n候选池：\n"
-        + "\n".join(candidate_lines)
-    )
+    prompt = build_recommend_prompt(market_snapshot, candidates)
 
     payload = {
         "model": model,
@@ -559,6 +530,139 @@ def recommend_candidates_with_ai(market_snapshot: dict, candidates: list[dict]) 
             "provider": provider,
             "content": f"AI 推荐暂时不可用：{exc}",
             "picks": [],
+        }
+
+
+def build_recommend_prompt(market_snapshot: dict, candidates: list[dict]) -> str:
+    market_lines = [f"- {item['label']} {item['change_pct']:+.2f}%" for item in market_snapshot.get("indices", [])]
+    candidate_lines = []
+    for item in candidates[:18]:
+        candidate_lines.append(
+            (
+                f"- {item['label']}（{item['symbol']}）"
+                f" 评分={item['score']}"
+                f" 风险={item['risk']}"
+                f" 量化风险={item['quant_risk_label']}"
+                f" 新闻={item['news_bias']}"
+                f" 开盘={item['open_strength']}"
+                f" 尾盘={item['close_strength']}"
+                f" 一进二={item['one_to_two']}"
+                f" 预案={'；'.join(item['next_day_plan'][:1]) if item['next_day_plan'] else '暂无'}"
+            )
+        )
+    return (
+        "你是一个保守型 A 股观察候选筛选助手。"
+        "请结合当前大盘环境、候选股走势、新闻偏向和风险，"
+        "从候选池里挑出最多 5 只更适合下一交易日观察的股票。"
+        "不要推荐明显弱势追击、冲高回落高风险、量化拥挤严重的标的。"
+        "输出严格 JSON，对象格式为："
+        '{"picks":[{"symbol":"代码","label":"名称","action":"观察/低吸观察/突破跟踪/等待","score":80,"reason":"推荐原因","playbook":"打法","risk_note":"风险提醒"}],"summary":"一段总说明"}'
+        "\n\n当前大盘：\n"
+        f"市场状态：{market_snapshot.get('mood', '未知')}\n"
+        + "\n".join(market_lines)
+        + "\n\n候选池：\n"
+        + "\n".join(candidate_lines)
+    )
+
+
+def chat_with_recommend_context(recommend_result: dict, history: list[dict], user_message: str) -> dict:
+    settings = load_ai_settings()
+    provider, base_url, model = _resolve_provider(settings)
+    if not provider or not base_url or not model:
+        return {
+            "enabled": False,
+            "provider": None,
+            "content": "未检测到可用的 AI 配置。",
+        }
+
+    api_key = _provider_api_key(provider, settings)
+    if not api_key:
+        return {
+            "enabled": False,
+            "provider": provider,
+            "content": f"{provider} 已配置但缺少 API Key。",
+        }
+
+    market_snapshot = recommend_result.get("market", {})
+    picks = recommend_result.get("picks", []) or []
+    candidates = recommend_result.get("candidates", []) or []
+
+    pick_lines = []
+    for item in picks[:5]:
+        pick_lines.append(
+            f"- {item.get('label', item.get('symbol', ''))}（{item.get('symbol', '')}）"
+            f" 动作={item.get('action', '观察')}"
+            f" 原因={item.get('reason', '暂无')}"
+            f" 打法={item.get('playbook', '暂无')}"
+            f" 风险={item.get('risk_note', '暂无')}"
+        )
+
+    candidate_lines = []
+    for item in candidates[:12]:
+        candidate_lines.append(
+            f"- {item.get('label', item.get('symbol', ''))}（{item.get('symbol', '')}）"
+            f" 评分={item.get('score', 0)}"
+            f" 新闻={item.get('news_bias', '中性')}"
+            f" 量化风险={item.get('quant_risk_label', '普通')}"
+            f" 尾盘={item.get('close_strength', '未知')}"
+        )
+
+    system_prompt = (
+        "你是一个保守、克制、风险优先的 A 股推荐对话助手。"
+        "你要围绕今天的市场环境和上一轮推荐结果继续回答。"
+        "回答时要明确区分事实、推断和交易计划。"
+        "不要给绝对化喊单，不要脱离当前市场状态乱推票。"
+        "更偏向给出观察框架、关键位、打法节奏和风险点。"
+    )
+    context_prompt = (
+        f"今天市场状态：{market_snapshot.get('mood', '未知')}\n"
+        + ("\n".join(f"- {item['label']} {item['change_pct']:+.2f}%" for item in market_snapshot.get("indices", [])) or "- 无指数数据")
+        + "\n\n上一轮推荐结果：\n"
+        + ("\n".join(pick_lines) if pick_lines else "- 暂无推荐结果")
+        + "\n\n候选池摘要：\n"
+        + ("\n".join(candidate_lines) if candidate_lines else "- 暂无候选池摘要")
+        + "\n\n请基于这些上下文继续回答用户问题。"
+    )
+
+    messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": context_prompt}]
+    for item in history[-12:]:
+        role = item.get("role")
+        content = str(item.get("content", "")).strip()
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_message})
+
+    payload = {
+        "model": model,
+        "temperature": 0.3,
+        "messages": messages,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/chat/completions",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "StockDesk/1.0",
+        },
+    )
+    try:
+        content = _request_chat(request, timeout=90)
+        return {"enabled": True, "provider": provider, "content": content}
+    except Exception as exc:
+        fallback = []
+        if pick_lines:
+            fallback.append("当前可继续观察的候选仍以上一轮推荐结果为主。")
+            fallback.append("建议先围绕推荐列表里的关键位、尾盘强弱和量化风险来追问，不要脱离今天盘面重新激进选股。")
+        if market_snapshot.get("mood"):
+            fallback.append(f"今天市场环境偏向：{market_snapshot.get('mood')}。")
+        fallback.append(f"AI 推荐对话暂时不可用：{exc}")
+        return {
+            "enabled": False,
+            "provider": provider,
+            "content": "\n".join(fallback),
         }
 
 

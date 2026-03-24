@@ -1,79 +1,81 @@
-# StockDesk
+# 股票盯盘
 
-[简体中文说明](README.md)
+[English](README.md)
 
-StockDesk is a lightweight Windows desktop stock monitor for A-share users.
+`股票盯盘` 是一个面向 A 股用户的轻量级 Windows 桌面盯盘工具。
 
-It includes:
+## 下载
 
-- A draggable floating widget with left/right edge docking
-- Tabs for `Recommended / Favorites / Holdings / Closed`
-- Intraday chart with hover price inspection
-- Price alerts for touch / breakout / breakdown
-- Cost, lots, profit/loss, and add/reduce position records
-- Rule-based analysis plus AI explanation
-- AI chat with per-stock history
-- News analysis with positive / negative bias
-- Screenshot import for holdings and watchlists
-- AI recommendations based on market context, local pool, and strong market candidates
+- 安装包：[StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
+- 官网 / 演示页：[GitHub Pages](https://jypdapeng.github.io/StockDesk/)
 
-## Download
+## 主要功能
 
-- Installer: [StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
-- Website / Demo: [GitHub Pages](https://jypdapeng.github.io/StockDesk/)
+- 可拖动悬浮小窗，支持左侧 / 右侧吸附
+- `推荐 / 收藏 / 持有 / 清仓` 四个页签
+- 当天完整分时图，支持鼠标悬停查看价格
+- 到价 / 突破 / 跌破提醒
+- 清仓后自动停止提醒
+- 持仓成本、手数、盈亏、加仓 / 减仓记录
+- 规则分析 + AI 解释
+- 单只股票 AI 对话，并保留历史记录
+- 推荐结果 AI 继续追问，自动带上当天市场环境
+- 相关新闻分析，区分正向 / 负向 / 中性
+- 支持券商截图导入持仓、自选
+- 基于市场环境、本地股票池和市场强势候选生成 AI 推荐
 
 ## AI
 
-Supported providers:
+支持接入：
 
-- Bailian
+- 百炼
 - DeepSeek
 
-Notes:
+说明：
 
-- `ai_settings.json` is local only and is ignored by git
-- `ai_chat_history.json` is also local only
-- API keys, personal holdings, and local chat history are not committed to this repository
+- `ai_settings.json` 仅保存在本机，不会提交到仓库
+- `ai_chat_history.json` 仅保存在本机
+- `ai_recommend_chat_history.json` 仅保存在本机
+- 仓库不会包含你的 API Key、个人持仓和本地对话记录
 
-## Run
+## 运行
 
-Run the widget:
+启动小窗：
 
 ```powershell
 python stock_widget.py
 ```
 
-Run the alert monitor:
+启动提醒：
 
 ```powershell
 python stock_monitor.py
 ```
 
-## Build
+## 打包
 
-Build the EXE:
+生成 EXE：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build_stock_app.ps1
 ```
 
-Build the installer:
+生成安装包：
 
 ```powershell
 & 'C:\Users\11317\AppData\Local\Programs\Inno Setup 6\ISCC.exe' 'C:\Users\11317\Documents\Playground\StockDesk.iss'
 ```
 
-## Donate
+## 赞赏
 
-Alipay
+支付宝
 
-![Alipay QR Code](assets/donate_alipay.jpg)
+![支付宝收款码](assets/donate_alipay.jpg)
 
-WeChat Pay
+微信支付
 
-![WeChat Pay QR Code](assets/donate_wechat.jpg)
+![微信收款码](assets/donate_wechat.jpg)
 
-## Disclaimer
+## 免责声明
 
-This project is for monitoring, recording, and analysis assistance only.
-It does not constitute investment advice.
+本项目仅用于盯盘、记录和辅助分析，不构成任何投资建议。

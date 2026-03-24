@@ -143,6 +143,8 @@ def side_of(price: float, level: float) -> str:
 def sync_state(state: dict, config: dict) -> dict:
     next_state: dict[str, dict] = {}
     for item in config["stocks"]:
+        if str(item.get("status", "")).strip().lower() == "closed":
+            continue
         symbol = item["symbol"]
         existing = state.get(symbol, {})
         old_sides = existing.get("sides", {})
@@ -270,7 +272,7 @@ def run_monitor(config_path: pathlib.Path, interval_override: int | None = None,
     state = sync_state({}, config)
 
     log(
-        f"stock monitor started, interval={interval}s, symbols={', '.join(item['symbol'] for item in config['stocks'])}",
+        f"stock monitor started, interval={interval}s, symbols={', '.join(item['symbol'] for item in config['stocks'] if str(item.get('status', '')).strip().lower() != 'closed')}",
         log_file,
     )
 
@@ -280,6 +282,8 @@ def run_monitor(config_path: pathlib.Path, interval_override: int | None = None,
             interval = config["interval"]
 
         for item in config["stocks"]:
+            if str(item.get("status", "")).strip().lower() == "closed":
+                continue
             try:
                 quote = fetch_quote(item["symbol"], item["market"])
                 log(

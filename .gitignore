@@ -14,3 +14,5 @@ venv/
 tmp-skill-check.mjs
 ai_settings.json
 ai_chat_history.json
+ai_recommend_chat_history.json
+stocks.restore.before-*.json

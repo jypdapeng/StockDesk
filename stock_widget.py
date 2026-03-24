@@ -20,6 +20,7 @@ from analysis_panel import open_analysis_panel
 from image_import_panel import open_image_import_dialog
 from market_recommend import generate_recommendations
 from news_panel import open_news_panel
+from recommend_chat_panel import open_recommend_chat_panel
 from stock_news import analyze_news_bias, fetch_stock_news
 from stock_common import APP_RUNTIME, APP_VERSION, DEFAULT_CONFIG, RESOURCE_DIR, fetch_intraday_points, fetch_quote, infer_market, load_config, save_config
 
@@ -97,6 +98,7 @@ class StockWidget:
         self.runtime_quotes = {}
         self.runtime_scores = {}
         self.max_live_quotes = 10
+        self.last_recommend_result = None
         self.hide_job = None
         self.hidden = False
         self.visible_strip = 14
@@ -219,6 +221,7 @@ class StockWidget:
         menu.add_command(label="打开网页", command=self.open_selected_site)
         menu.add_command(label="相关新闻", command=self.open_news_panel)
         menu.add_command(label="AI对话", command=self.open_ai_chat_panel)
+        menu.add_command(label="推荐对话", command=self.open_recommend_chat_panel)
         menu.add_command(label="AI设置", command=self.open_ai_settings_dialog)
         menu.add_command(label="版本信息", command=self.show_version_info)
         if self.active_tab == "favorite":
@@ -1208,8 +1211,10 @@ class StockWidget:
         result_box.pack(fill="both", expand=True, padx=12, pady=(8, 0))
         result_box.insert("1.0", "生成中...")
         result_box.configure(state="disabled")
+        follow_button = None
 
         def apply_result(result):
+            self.last_recommend_result = result
             picks = result.get("picks", [])
             pick_map = {str(item.get("symbol", "")).strip(): item for item in picks if str(item.get("symbol", "")).strip()}
             updated_at = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1288,6 +1293,8 @@ class StockWidget:
             result_box.insert("1.0", "\n".join(lines).strip() or "暂无推荐结果。")
             result_box.configure(state="disabled")
             status_label.configure(text=f"已生成 {len(picks)} 只推荐股票。", fg=TEXT if picks else MUTED)
+            if follow_button is not None:
+                follow_button.configure(state="normal" if picks or result.get("content") else "disabled")
             self.active_tab = "recommended"
             self.save_and_reload()
 
@@ -1302,8 +1309,21 @@ class StockWidget:
 
         bar = tk.Frame(dialog, bg=PANEL)
         bar.pack(fill="x", padx=12, pady=12)
+        follow_button = tk.Button(bar, text="继续追问", state="disabled", command=self.open_recommend_chat_panel)
+        follow_button.pack(side="left")
         tk.Button(bar, text="关闭", command=dialog.destroy).pack(side="right")
         self.center_dialog(dialog)
+
+    def open_recommend_chat_panel(self):
+        if not isinstance(self.last_recommend_result, dict):
+            messagebox.showinfo("推荐对话", "请先生成一次 AI 推荐。")
+            return
+        open_recommend_chat_panel(
+            self.root,
+            self.last_recommend_result,
+            on_mouse_enter=self.on_mouse_enter,
+            center_dialog=self.center_dialog,
+        )
 
     def open_ai_chat_panel(self):
         stock_item = self.find_stock(self.selected_symbol)

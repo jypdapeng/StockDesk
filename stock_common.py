@@ -3,7 +3,7 @@ import pathlib
 import sys
 import urllib.request
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.9"
 
 if getattr(sys, "frozen", False):
     APP_DIR = pathlib.Path(sys.executable).resolve().parent
