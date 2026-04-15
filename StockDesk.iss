@@ -1,5 +1,5 @@
 #define MyAppName "股票盯盘"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.0.11"
 #define MyAppPublisher "Codex"
 #define MyAppExeName "StockDesk.exe"
 #define MyAppURL "https://github.com/jypdapeng/StockDesk"

@@ -8,6 +8,8 @@ StockDesk is a lightweight Windows desktop stock monitor for A-share users.
 
 - Installer: [StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
 - Website / Demo: [GitHub Pages](https://jypdapeng.github.io/StockDesk/)
+- Project plan: [PROJECT_PLAN.md](./PROJECT_PLAN.md)
+- Development progress: [DEVELOPMENT_PROGRESS.md](./DEVELOPMENT_PROGRESS.md)
 
 ## Features
 

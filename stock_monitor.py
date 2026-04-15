@@ -84,8 +84,10 @@ width = max(360, root.winfo_reqwidth())
 height = root.winfo_reqheight()
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
-x = screen_width - width - 20
-y = screen_height - height - 80
+margin_x = 28
+margin_y = 56
+x = max(0, int(screen_width - width - margin_x))
+y = max(0, int(screen_height - height - margin_y))
 root.geometry(f"{width}x{height}+{x}+{y}")
 root.mainloop()
 """

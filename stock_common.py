@@ -1,9 +1,10 @@
 import json
+import os
 import pathlib
 import sys
 import urllib.request
 
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.0.11"
 
 if getattr(sys, "frozen", False):
     APP_DIR = pathlib.Path(sys.executable).resolve().parent
@@ -15,7 +16,8 @@ else:
     APP_RUNTIME = pathlib.Path(__file__).resolve()
 
 BASE_DIR = APP_DIR
-DEFAULT_CONFIG = APP_DIR / "stocks.json"
+USER_DATA_DIR = pathlib.Path(os.getenv("APPDATA") or (pathlib.Path.home() / "AppData" / "Roaming")) / "StockDesk"
+DEFAULT_CONFIG = USER_DATA_DIR / "stocks.json"
 QQ_QUOTE_URL = "https://qt.gtimg.cn/q={market}{symbol}"
 QQ_MINUTE_URL = "https://web.ifzq.gtimg.cn/appstock/app/minute/query?code={market}{symbol}"
 
@@ -23,7 +25,7 @@ QQ_MINUTE_URL = "https://web.ifzq.gtimg.cn/appstock/app/minute/query?code={marke
 def default_config_payload() -> dict:
     return {
         "interval": 1,
-        "log_file": str(APP_DIR / "stock_monitor.log"),
+        "log_file": str(USER_DATA_DIR / "stock_monitor.log"),
         "stocks": [],
         "widget": {
             "show_title": False,
@@ -32,8 +34,11 @@ def default_config_payload() -> dict:
             "active_tab": "holding",
             "sort_by": "default",
             "sort_desc": True,
+            "ui_scale": 1.0,
             "favorite_search": "",
             "favorite_filter": "all",
+            "intraday_runtime_reminder": True,
+            "intraday_strong_reminder": True,
             "recommend_filter": {
                 "min_price": "",
                 "max_price": "",
@@ -44,6 +49,54 @@ def default_config_payload() -> dict:
             },
         },
     }
+
+
+def _legacy_config_candidates() -> list[pathlib.Path]:
+    candidates = [
+        APP_DIR / "stocks.json",
+        RESOURCE_DIR / "stocks.json",
+        BASE_DIR / "stocks.json",
+    ]
+    unique: list[pathlib.Path] = []
+    for item in candidates:
+        resolved = item.resolve()
+        if resolved == DEFAULT_CONFIG.resolve():
+            continue
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def _is_valid_config_payload(raw: str) -> bool:
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return False
+    return isinstance(data, dict) and isinstance(data.get("stocks"), list)
+
+
+def ensure_config_file(path: pathlib.Path | None = None) -> pathlib.Path:
+    path = pathlib.Path(path or DEFAULT_CONFIG)
+    if path.exists():
+        return path
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.resolve() == DEFAULT_CONFIG.resolve():
+        for candidate in _legacy_config_candidates():
+            if not candidate.exists():
+                continue
+            try:
+                raw = candidate.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if not _is_valid_config_payload(raw):
+                continue
+            path.write_text(raw, encoding="utf-8")
+            return path
+
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(default_config_payload(), fh, ensure_ascii=False, indent=2)
+    return path
 
 
 def infer_market(symbol: str) -> str:
@@ -141,12 +194,8 @@ def fetch_intraday_points(symbol: str, market: str | None = None) -> list[tuple[
 
 
 def load_config(path: pathlib.Path | None = None) -> dict:
-    path = path or DEFAULT_CONFIG
+    path = ensure_config_file(path or DEFAULT_CONFIG)
     path = pathlib.Path(path)
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as fh:
-            json.dump(default_config_payload(), fh, ensure_ascii=False, indent=2)
     with pathlib.Path(path).open("r", encoding="utf-8") as fh:
         data = json.load(fh)
 
@@ -201,6 +250,7 @@ def load_config(path: pathlib.Path | None = None) -> dict:
             "sort_desc": bool(widget.get("sort_desc", True)),
             "favorite_search": str(widget.get("favorite_search", "")),
             "favorite_filter": widget.get("favorite_filter", "all"),
+            "intraday_strong_reminder": bool(widget.get("intraday_strong_reminder", True)),
             "recommend_filter": widget.get("recommend_filter", default_config_payload()["widget"]["recommend_filter"]),
         },
     }
@@ -208,6 +258,7 @@ def load_config(path: pathlib.Path | None = None) -> dict:
 
 def save_config(path: pathlib.Path, config: dict) -> None:
     path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "interval": int(config.get("interval", 30)),
         "log_file": config.get("log_file"),
@@ -221,6 +272,7 @@ def save_config(path: pathlib.Path, config: dict) -> None:
             "sort_desc": bool(config.get("widget", {}).get("sort_desc", True)),
             "favorite_search": config.get("widget", {}).get("favorite_search", ""),
             "favorite_filter": config.get("widget", {}).get("favorite_filter", "all"),
+            "intraday_strong_reminder": bool(config.get("widget", {}).get("intraday_strong_reminder", True)),
             "recommend_filter": config.get("widget", {}).get("recommend_filter", default_config_payload()["widget"]["recommend_filter"]),
         },
     }

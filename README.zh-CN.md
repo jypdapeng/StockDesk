@@ -8,6 +8,8 @@
 
 - 安装包：[StockDesk-Setup.exe](https://github.com/jypdapeng/StockDesk/releases/latest/download/StockDesk-Setup.exe)
 - 官网 / 演示页：[GitHub Pages](https://jypdapeng.github.io/StockDesk/)
+- 项目规划：[PROJECT_PLAN.md](./PROJECT_PLAN.md)
+- 开发进度：[DEVELOPMENT_PROGRESS.md](./DEVELOPMENT_PROGRESS.md)
 
 ## 主要功能
 

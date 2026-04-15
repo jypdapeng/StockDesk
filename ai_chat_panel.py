@@ -5,6 +5,7 @@ import tkinter as tk
 
 from ai_provider import chat_with_stock_context
 from analysis_engine import analyze_stock
+from stock_common import USER_DATA_DIR
 
 
 BG = "#0f172a"
@@ -15,10 +16,17 @@ USER_BUBBLE = "#2563eb"
 AI_BUBBLE = "#1f2937"
 BUTTON = "#2563eb"
 BORDER = "#334155"
-CHAT_HISTORY_PATH = pathlib.Path(__file__).resolve().parent / "ai_chat_history.json"
+CHAT_HISTORY_PATH = USER_DATA_DIR / "ai_chat_history.json"
+LEGACY_CHAT_HISTORY_PATH = pathlib.Path(__file__).resolve().parent / "ai_chat_history.json"
 
 
 def _load_history_map() -> dict:
+    if not CHAT_HISTORY_PATH.exists() and LEGACY_CHAT_HISTORY_PATH.exists():
+        try:
+            CHAT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            CHAT_HISTORY_PATH.write_text(LEGACY_CHAT_HISTORY_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        except Exception:
+            pass
     if not CHAT_HISTORY_PATH.exists():
         return {}
     try:
@@ -28,6 +36,7 @@ def _load_history_map() -> dict:
 
 
 def _save_history_map(data: dict) -> None:
+    CHAT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     CHAT_HISTORY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -41,14 +50,15 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
     symbol = stock_item["symbol"]
     history_map = _load_history_map()
     history: list[dict] = history_map.get(symbol, [])
-    analysis = analyze_stock(stock_item)
+    state = {"analysis": None}
 
     container = tk.Frame(dialog, bg=BG, padx=14, pady=14)
     container.pack(fill="both", expand=True)
 
+    title = stock_item.get("label") or stock_item.get("name") or symbol
     tk.Label(
         container,
-        text=f"{stock_item.get('label') or symbol} · AI 对话",
+        text=f"{title} · AI 对话",
         fg=TEXT,
         bg=BG,
         font=("Microsoft YaHei UI", 12, "bold"),
@@ -93,9 +103,12 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
         return "break"
 
     canvas.bind("<Configure>", sync_width, add="+")
-    canvas.bind_all("<MouseWheel>", on_mousewheel, add="+")
-    canvas.bind_all("<Button-4>", on_linux_scroll_up, add="+")
-    canvas.bind_all("<Button-5>", on_linux_scroll_down, add="+")
+    canvas.bind("<MouseWheel>", on_mousewheel, add="+")
+    canvas.bind("<Button-4>", on_linux_scroll_up, add="+")
+    canvas.bind("<Button-5>", on_linux_scroll_down, add="+")
+    messages_frame.bind("<MouseWheel>", on_mousewheel, add="+")
+    messages_frame.bind("<Button-4>", on_linux_scroll_up, add="+")
+    messages_frame.bind("<Button-5>", on_linux_scroll_down, add="+")
 
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
@@ -115,6 +128,14 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
 
     footer = tk.Frame(container, bg=BG)
     footer.pack(fill="x", pady=(10, 0))
+    status_label = tk.Label(
+        footer,
+        text="会在发送前刷新最新行情。",
+        fg=MUTED,
+        bg=BG,
+        font=("Microsoft YaHei UI", 8),
+    )
+    status_label.pack(side="left")
 
     def persist_history() -> None:
         history_map[symbol] = history[-40:]
@@ -130,15 +151,9 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
 
         align = "e" if role == "user" else "w"
         bubble_bg = USER_BUBBLE if role == "user" else AI_BUBBLE
-        title = "你" if role == "user" else "AI"
+        title_text = "你" if role == "user" else "AI"
 
-        header = tk.Label(
-            outer,
-            text=title,
-            fg=MUTED,
-            bg=PANEL,
-            font=("Microsoft YaHei UI", 8, "bold"),
-        )
+        header = tk.Label(outer, text=title_text, fg=MUTED, bg=PANEL, font=("Microsoft YaHei UI", 8, "bold"))
         header.pack(anchor=align, padx=4, pady=(0, 2))
 
         bubble = tk.Label(
@@ -171,6 +186,7 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
         append_bubble("user", message)
         history.append({"role": "user", "content": message})
         persist_history()
+        status_label.configure(text="正在刷新最新行情和分析...", fg=MUTED)
 
         waiting_holder = {"shown": False}
 
@@ -178,13 +194,18 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
             if waiting_holder["shown"]:
                 return
             waiting_holder["shown"] = True
-            append_bubble("assistant", "正在思考中...")
+            append_bubble("assistant", "正在刷新最新行情并思考中...")
 
         parent.after(400, show_waiting)
 
         def worker() -> None:
-            result = chat_with_stock_context(stock_item, analysis, history, message)
-            answer = result["content"]
+            try:
+                latest_analysis = analyze_stock(stock_item)
+                state["analysis"] = latest_analysis
+                result = chat_with_stock_context(stock_item, latest_analysis, history, message)
+                answer = result["content"]
+            except Exception as exc:
+                answer = f"AI 对话暂时不可用：{exc}"
 
             def render_answer() -> None:
                 if waiting_holder["shown"]:
@@ -194,6 +215,14 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
                 append_bubble("assistant", answer)
                 history.append({"role": "assistant", "content": answer})
                 persist_history()
+
+                latest_time = ""
+                if isinstance(state.get("analysis"), dict):
+                    latest_time = str(state["analysis"].get("quote", {}).get("time", "")).strip()
+                if latest_time:
+                    status_label.configure(text=f"已按最新行情回答（{latest_time}）。", fg=MUTED)
+                else:
+                    status_label.configure(text="已按最新行情回答。", fg=MUTED)
 
             parent.after(0, render_answer)
 
@@ -214,12 +243,6 @@ def open_ai_chat_panel(parent: tk.Tk, stock_item: dict, on_mouse_enter=None, cen
     send_button.pack(side="left", padx=(8, 0), fill="y")
 
     def close_dialog() -> None:
-        try:
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-        except Exception:
-            pass
         dialog.destroy()
 
     tk.Button(footer, text="关闭", command=close_dialog).pack(side="right")

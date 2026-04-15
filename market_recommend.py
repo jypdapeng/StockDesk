@@ -1,20 +1,14 @@
-import datetime as dt
-import json
+﻿import json
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from ai_provider import recommend_candidates_with_ai
 from analysis_engine import analyze_stock
+from market_state import get_market_state
 from stock_common import fetch_quote, infer_market
 from stock_news import analyze_news_bias, fetch_stock_news
 
-
-INDEX_POOL = [
-    {"symbol": "000001", "market": "sh", "label": "上证指数"},
-    {"symbol": "399001", "market": "sz", "label": "深证成指"},
-    {"symbol": "399006", "market": "sz", "label": "创业板指"},
-]
 
 RISK_LEVEL_ORDER = {"偏低": 0, "中等": 1, "偏高": 2}
 EASTMONEY_POOL_URL = (
@@ -25,34 +19,18 @@ EASTMONEY_POOL_URL = (
 )
 
 
-def _market_snapshot() -> dict[str, Any]:
-    indices = []
-    for item in INDEX_POOL:
-        try:
-            quote = fetch_quote(item["symbol"], item["market"])
-            indices.append(
-                {
-                    "symbol": item["symbol"],
-                    "label": item["label"],
-                    "price": quote["price"],
-                    "change_pct": quote["change_pct"],
-                }
-            )
-        except Exception:
-            continue
+def _is_kcb(symbol: str, market: str | None = None) -> bool:
+    symbol = str(symbol or "").strip()
+    return symbol.startswith("688") or symbol.startswith("689")
 
-    avg_change = sum(index["change_pct"] for index in indices) / len(indices) if indices else 0
-    if avg_change >= 1:
-        mood = "指数偏强"
-    elif avg_change <= -1:
-        mood = "指数偏弱"
-    else:
-        mood = "指数震荡"
-    return {
-        "indices": indices,
-        "mood": mood,
-        "generated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
+
+def _limit_up_threshold(symbol: str) -> float:
+    code = str(symbol or "").strip()
+    if code.startswith(("300", "301", "688", "689")):
+        return 20.0
+    if code.startswith(("8", "4")):
+        return 30.0
+    return 10.0
 
 
 def _build_local_pool(stocks: list[dict], limit: int = 6) -> list[dict]:
@@ -80,10 +58,7 @@ def _build_local_pool(stocks: list[dict], limit: int = 6) -> list[dict]:
 def _fetch_market_candidates(limit: int = 8) -> list[dict[str, Any]]:
     request = urllib.request.Request(
         EASTMONEY_POOL_URL.format(limit=max(limit * 2, 16)),
-        headers={
-            "Referer": "https://quote.eastmoney.com/",
-            "User-Agent": "Mozilla/5.0",
-        },
+        headers={"Referer": "https://quote.eastmoney.com/", "User-Agent": "Mozilla/5.0"},
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         payload = json.loads(response.read().decode("utf-8", errors="replace"))
@@ -127,17 +102,15 @@ def _combine_candidate_pool(stocks: list[dict], local_limit: int = 5, market_lim
 
     for item in _build_local_pool(stocks, limit=local_limit):
         symbol = str(item.get("symbol", "")).strip()
-        if not symbol or symbol in seen:
-            continue
-        combined.append(item)
-        seen.add(symbol)
+        if symbol and symbol not in seen:
+            combined.append(item)
+            seen.add(symbol)
 
     for item in _fetch_market_candidates(limit=market_limit):
         symbol = str(item.get("symbol", "")).strip()
-        if not symbol or symbol in seen:
-            continue
-        combined.append(item)
-        seen.add(symbol)
+        if symbol and symbol not in seen:
+            combined.append(item)
+            seen.add(symbol)
 
     return combined
 
@@ -182,6 +155,8 @@ def _candidate_summary(item: dict) -> dict[str, Any] | None:
         "facts": analysis["facts"][:2],
         "observations": analysis["observations"][:3],
         "news_bias": news_bias["overall"],
+        "market_mood": analysis["market_state"]["mood"],
+        "market_tactic": analysis["market_state"]["tactic"],
     }
 
 
@@ -195,6 +170,12 @@ def _apply_filters(candidates: list[dict], filters: dict[str, Any] | None) -> li
     max_quant_risk = str(filters.get("max_quant_risk", "中等"))
     require_levels = bool(filters.get("require_levels", True))
     prefer_positive_news = bool(filters.get("prefer_positive_news", False))
+    allow_kcb = bool(filters.get("allow_kcb", False))
+    avoid_limit_up = bool(filters.get("avoid_limit_up", True))
+    try:
+        max_chase_pct = float(filters.get("max_chase_pct", 7.5) or 7.5)
+    except Exception:
+        max_chase_pct = 7.5
 
     try:
         min_price_value = float(min_price) if str(min_price).strip() else None
@@ -206,7 +187,7 @@ def _apply_filters(candidates: list[dict], filters: dict[str, Any] | None) -> li
         max_price_value = None
 
     max_risk_order = RISK_LEVEL_ORDER.get(max_quant_risk, 1)
-    filtered = []
+    filtered: list[dict] = []
     for item in candidates:
         latest_price = float(item.get("latest_price") or 0)
         if min_price_value is not None and latest_price < min_price_value:
@@ -215,18 +196,28 @@ def _apply_filters(candidates: list[dict], filters: dict[str, Any] | None) -> li
             continue
         if int(item.get("score", 0) or 0) < min_score:
             continue
-        if RISK_LEVEL_ORDER.get(item.get("quant_risk", "中等"), 1) > max_risk_order:
+        if RISK_LEVEL_ORDER.get(str(item.get("quant_risk") or "中等"), 1) > max_risk_order:
             continue
         if require_levels and item.get("source") == "local" and not item.get("levels"):
             continue
-        if prefer_positive_news and item.get("news_bias") != "偏正向":
+        news_bias = str(item.get("news_bias") or "").strip()
+        if prefer_positive_news and news_bias not in {"偏正向", "positive"}:
             continue
+        if not allow_kcb and _is_kcb(item.get("symbol", ""), item.get("market")):
+            continue
+        change_pct = float(item.get("latest_change_pct") or 0)
+        if change_pct >= max_chase_pct:
+            continue
+        if avoid_limit_up:
+            up_limit = _limit_up_threshold(str(item.get("symbol", "")))
+            if change_pct >= max(0.0, up_limit - 0.3):
+                continue
         filtered.append(item)
     return filtered
 
 
 def generate_recommendations(stocks: list[dict], filters: dict[str, Any] | None = None) -> dict[str, Any]:
-    market = _market_snapshot()
+    market = get_market_state()
     candidates: list[dict[str, Any]] = []
     pool = _combine_candidate_pool(stocks)
 
@@ -266,7 +257,7 @@ def generate_recommendations(stocks: list[dict], filters: dict[str, Any] | None 
             candidates,
             key=lambda item: (
                 item.get("score", 0),
-                item.get("news_bias") == "偏正向",
+                item.get("news_bias") in {"偏正向", "positive"},
                 item.get("quant_risk") != "偏高",
                 item.get("latest_change_pct", 0),
             ),
@@ -279,7 +270,7 @@ def generate_recommendations(stocks: list[dict], filters: dict[str, Any] | None 
                 "market": item.get("market"),
                 "action": "观察",
                 "score": item["score"],
-                "reason": f"{item['open_strength']} / {item['close_strength']} / {item['news_bias']}",
+                "reason": f"{item['market_mood']} / {item['open_strength']} / {item['close_strength']} / {item['news_bias']}",
                 "playbook": item["next_day_plan"][0] if item["next_day_plan"] else "先看关键位承接。",
                 "risk_note": item["quant_risk_label"],
                 "source": item.get("source", "local"),
@@ -293,3 +284,4 @@ def generate_recommendations(stocks: list[dict], filters: dict[str, Any] | None 
         "content": ai_result.get("content", ""),
         "candidates": candidates,
     }
+

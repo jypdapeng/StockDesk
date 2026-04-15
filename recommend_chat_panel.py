@@ -4,6 +4,8 @@ import threading
 import tkinter as tk
 
 from ai_provider import chat_with_recommend_context
+from market_state import get_market_state
+from stock_common import USER_DATA_DIR
 
 
 BG = "#0f172a"
@@ -14,10 +16,17 @@ USER_BUBBLE = "#2563eb"
 AI_BUBBLE = "#1f2937"
 BUTTON = "#2563eb"
 BORDER = "#334155"
-CHAT_HISTORY_PATH = pathlib.Path(__file__).resolve().parent / "ai_recommend_chat_history.json"
+CHAT_HISTORY_PATH = USER_DATA_DIR / "ai_recommend_chat_history.json"
+LEGACY_CHAT_HISTORY_PATH = pathlib.Path(__file__).resolve().parent / "ai_recommend_chat_history.json"
 
 
 def _load_history_map() -> dict:
+    if not CHAT_HISTORY_PATH.exists() and LEGACY_CHAT_HISTORY_PATH.exists():
+        try:
+            CHAT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            CHAT_HISTORY_PATH.write_text(LEGACY_CHAT_HISTORY_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        except Exception:
+            pass
     if not CHAT_HISTORY_PATH.exists():
         return {}
     try:
@@ -27,6 +36,7 @@ def _load_history_map() -> dict:
 
 
 def _save_history_map(data: dict) -> None:
+    CHAT_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     CHAT_HISTORY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -54,7 +64,7 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
     ).pack(anchor="w")
     tk.Label(
         container,
-        text="围绕今天的市场环境和刚生成的推荐结果继续追问，例如：为什么是这 5 只、先看谁、什么价位更适合观察。",
+        text="围绕今天的市场状态和推荐结果继续追问，例如：为什么是这 5 只、谁优先看、什么价位更适合观察。",
         fg=MUTED,
         bg=BG,
         font=("Microsoft YaHei UI", 9),
@@ -92,9 +102,12 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
         return "break"
 
     canvas.bind("<Configure>", sync_width, add="+")
-    canvas.bind_all("<MouseWheel>", on_mousewheel, add="+")
-    canvas.bind_all("<Button-4>", on_linux_scroll_up, add="+")
-    canvas.bind_all("<Button-5>", on_linux_scroll_down, add="+")
+    canvas.bind("<MouseWheel>", on_mousewheel, add="+")
+    canvas.bind("<Button-4>", on_linux_scroll_up, add="+")
+    canvas.bind("<Button-5>", on_linux_scroll_down, add="+")
+    messages_frame.bind("<MouseWheel>", on_mousewheel, add="+")
+    messages_frame.bind("<Button-4>", on_linux_scroll_up, add="+")
+    messages_frame.bind("<Button-5>", on_linux_scroll_down, add="+")
 
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
@@ -114,6 +127,14 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
 
     footer = tk.Frame(container, bg=BG)
     footer.pack(fill="x", pady=(10, 0))
+    status_label = tk.Label(
+        footer,
+        text="会在发送前刷新今天的市场状态。",
+        fg=MUTED,
+        bg=BG,
+        font=("Microsoft YaHei UI", 8),
+    )
+    status_label.pack(side="left")
 
     def persist_history() -> None:
         history_map[history_key] = history[-50:]
@@ -129,16 +150,9 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
 
         align = "e" if role == "user" else "w"
         bubble_bg = USER_BUBBLE if role == "user" else AI_BUBBLE
-        title = "你" if role == "user" else "AI"
+        title_text = "你" if role == "user" else "AI"
 
-        tk.Label(
-            outer,
-            text=title,
-            fg=MUTED,
-            bg=PANEL,
-            font=("Microsoft YaHei UI", 8, "bold"),
-        ).pack(anchor=align, padx=4, pady=(0, 2))
-
+        tk.Label(outer, text=title_text, fg=MUTED, bg=PANEL, font=("Microsoft YaHei UI", 8, "bold")).pack(anchor=align, padx=4, pady=(0, 2))
         bubble = tk.Label(
             outer,
             text=content,
@@ -173,6 +187,7 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
         append_bubble("user", message)
         history.append({"role": "user", "content": message})
         persist_history()
+        status_label.configure(text="正在刷新今天的市场状态...", fg=MUTED)
 
         waiting_holder = {"shown": False}
 
@@ -180,13 +195,18 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
             if waiting_holder["shown"]:
                 return
             waiting_holder["shown"] = True
-            append_bubble("assistant", "正在结合今天的市场和推荐结果继续分析中...")
+            append_bubble("assistant", "正在结合今天的市场状态和推荐结果继续分析中...")
 
         parent.after(400, show_waiting)
 
         def worker() -> None:
-            result = chat_with_recommend_context(recommend_result, history, message)
-            answer = result["content"]
+            refreshed = dict(recommend_result)
+            try:
+                refreshed["market"] = get_market_state()
+                result = chat_with_recommend_context(refreshed, history, message)
+                answer = result["content"]
+            except Exception as exc:
+                answer = f"推荐对话暂时不可用：{exc}"
 
             def render_answer() -> None:
                 if waiting_holder["shown"]:
@@ -196,6 +216,11 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
                 append_bubble("assistant", answer)
                 history.append({"role": "assistant", "content": answer})
                 persist_history()
+                latest_market = refreshed.get("market", {})
+                status_label.configure(
+                    text=f"已按最新市场状态回答（{latest_market.get('mood', '未知')}）。",
+                    fg=MUTED,
+                )
 
             parent.after(0, render_answer)
 
@@ -216,12 +241,6 @@ def open_recommend_chat_panel(parent: tk.Tk, recommend_result: dict, on_mouse_en
     send_button.pack(side="left", padx=(8, 0), fill="y")
 
     def close_dialog() -> None:
-        try:
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-        except Exception:
-            pass
         dialog.destroy()
 
     tk.Button(footer, text="关闭", command=close_dialog).pack(side="right")
